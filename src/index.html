@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMURKA PVE Launcher</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Title Bar -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-icon">◆</span>
+      <span>AMURKA PVE LAUNCHER</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="tb-btn" onclick="window.api.minimize()">─</button>
+      <button class="tb-btn" onclick="window.api.maximize()">□</button>
+      <button class="tb-btn tb-close" onclick="window.api.close()">✕</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Left Panel -->
+    <div class="panel panel-left">
+      <div class="logo-section">
+        <h1 class="logo-title">AMURKA</h1>
+        <h2 class="logo-subtitle">PVE</h2>
+        <div class="server-info" id="serverInfo">SCUM Server | 85.88.179.207:7004</div>
+      </div>
+
+      <div class="progress-section" id="progressSection" style="display:none">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
+
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">Загрузка...</span>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-number" id="availableCount">0</div>
+          <div class="stat-label">доступно</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <div class="stat-number installed" id="installedCount">0</div>
+          <div class="stat-label">установлено</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="launchBtn">
+          <span class="btn-icon">▶</span>
+          ЗАПУСТИТЬ ИГРУ
+        </button>
+        <button class="btn btn-accent" id="downloadBtn">
+          <span class="btn-icon">⬇</span>
+          СКАЧАТЬ ВСЕ МОДЫ
+        </button>
+        <button class="btn btn-danger" id="deleteBtn">
+          <span class="btn-icon">✕</span>
+          УДАЛИТЬ ВСЕ МОДЫ
+        </button>
+      </div>
+
+      <div class="launch-mode">
+        <label class="mode-label">Режим запуска</label>
+        <div class="mode-select">
+          <button class="mode-btn active" data-mode="dx11">DX11</button>
+          <button class="mode-btn" data-mode="dx12">DX12</button>
+          <button class="mode-btn" data-mode="vulkan">Vulkan</button>
+        </div>
+      </div>
+
+      <div class="footer">Created by <span class="highlight">DOMO</span></div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="panel panel-right">
+      <div class="section-title">ПУТИ УСТАНОВКИ</div>
+
+      <div class="path-group">
+        <label class="path-label">Папка игры</label>
+        <div class="path-row">
+          <input class="path-input" id="gamePathInput">
+          <button class="btn-icon-only" id="browseGameBtn" title="Обзор">📁</button>
+        </div>
+        <div class="path-status" id="gameStatus">
+          <span class="status-dot small"></span>
+          <span>SCUM не найден</span>
+        </div>
+      </div>
+
+      <div class="path-group">
+        <label class="path-label">Папка модов (~mods)</label>
+        <div class="path-row">
+          <input class="path-input" id="modsPathInput">
+          <button class="btn-icon-only" id="browseModsBtn" title="Обзор">📁</button>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:20px">ССЫЛКИ</div>
+
+      <div class="links-grid">
+        <button class="link-btn vote" onclick="window.api.openUrl('https://wargm.ru/server/77385/votes')">
+          <span class="link-icon">🗳</span>
+          <span>Голосование</span>
+        </button>
+        <button class="link-btn shop" onclick="window.api.openUrl('https://wargm.ru/server/77385/shop')">
+          <span class="link-icon">🛒</span>
+          <span>Магазин</span>
+        </button>
+        <button class="link-btn discord" onclick="window.api.openUrl('https://discord.gg/CApw7CYBtA')">
+          <span class="link-icon">💬</span>
+          <span>Discord</span>
+        </button>
+        <button class="link-btn lolka" onclick="window.api.openUrl('https://lolka.gg/nmgHA2I')">
+          <span class="link-icon">🎁</span>
+          <span>Lolka</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
