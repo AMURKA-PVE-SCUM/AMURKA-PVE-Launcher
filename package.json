@@ -1,6 +1,6 @@
 {
   "name": "amurka-launcher",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "AMURKA PVE Mod Launcher for SCUM",
   "main": "main.js",
   "scripts": {
@@ -28,11 +28,18 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": true,
-      "shortcutName": "AMURKA PVE Launcher"
+      "shortcutName": "AMURKA PVE Launcher",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
     }
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "ico-endec": "^0.1.6",
+    "icojs": "^1.0.0",
+    "png-to-ico": "^3.0.2",
+    "rcedit": "^5.0.2",
+    "sharp": "^0.35.3"
   }
 }
