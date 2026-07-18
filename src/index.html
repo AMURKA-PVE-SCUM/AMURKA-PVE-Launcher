@@ -4,14 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AMURKA PVE Launcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <canvas id="particles-canvas"></canvas>
+
   <!-- Title Bar -->
   <div class="titlebar" id="titlebar">
     <div class="titlebar-drag">
-      <span class="titlebar-icon">◆</span>
-      <span>AMURKA PVE LAUNCHER</span>
+      <span><span style="color:#fff">AMURKA</span> <span style="color:var(--accent)">PVE</span></span>
     </div>
     <div class="titlebar-controls">
       <button class="tb-btn" onclick="window.api.minimize()">─</button>
@@ -24,9 +28,9 @@
     <!-- Left Panel -->
     <div class="panel panel-left">
       <div class="logo-section">
-        <h1 class="logo-title">AMURKA</h1>
-        <h2 class="logo-subtitle">PVE</h2>
-        <div class="server-info" id="serverInfo">SCUM Server | 85.88.179.207:7004</div>
+        <h1 class="logo-title" style="-webkit-text-fill-color:#fff;background:none;filter:none">AMURKA</h1>
+        <h2 class="logo-subtitle" style="color:var(--accent);letter-spacing:4px">PVE MOD</h2>
+        <div class="server-info" id="serverInfo">SCUM Server | 212.22.93.89:20022 <span class="copy-icon">📋</span></div>
       </div>
 
       <div class="progress-section" id="progressSection" style="display:none">
@@ -123,6 +127,10 @@
           <span class="link-icon">🎁</span>
           <span>Lolka</span>
         </button>
+      </div>
+
+      <div class="wargm-banner">
+        <img src="https://wargm.ru/primg468/77385.png" alt="Wargm" onerror="this.style.display='none'">
       </div>
     </div>
   </div>

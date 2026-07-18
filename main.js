@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -9,7 +9,7 @@ const DOWNLOAD_CONCURRENCY = 4;
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const APP_NAME = 'AMURKA PVE MOD';
-const SERVER_IP = '85.88.179.207:7004';
+const SERVER_IP = '212.22.93.89:20022';
 const GITHUB_REPO = 'AMURKA-PVE-SCUM/amurka-pve-mods';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
@@ -340,6 +340,10 @@ ipcMain.handle('launch-game', (_, { gamePath, mode }) => {
 });
 
 ipcMain.handle('open-url', (_, url) => shell.openExternal(url));
+ipcMain.handle('copy-text', (_, text) => {
+  clipboard.writeText(text);
+  return true;
+});
 ipcMain.handle('browse-folder', async (_, defaultPath) => {
   const result = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],

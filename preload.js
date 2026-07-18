@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteAllMods: (p) => ipcRenderer.invoke('delete-all-mods', p),
   launchGame: (opts) => ipcRenderer.invoke('launch-game', opts),
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
+  copyText: (text) => ipcRenderer.invoke('copy-text', text),
   browseFolder: (p) => ipcRenderer.invoke('browse-folder', p),
   onDownloadProgress: (cb) => {
     ipcRenderer.on('download-progress', (_, data) => cb(data));

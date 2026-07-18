@@ -45,7 +45,12 @@ function updateProgress(pct, file, downloaded, total) {
 
 async function init() {
   const constants = await window.api.getConstants();
-  $('serverInfo').textContent = `SCUM Server | ${constants.serverIp}`;
+  $('serverInfo').innerHTML = `SCUM Server | ${constants.serverIp} <span class="copy-icon">📋</span>`;
+
+  $('serverInfo').addEventListener('click', async () => {
+    await window.api.copyText(constants.serverIp);
+    showToast('IP скопирован: ' + constants.serverIp, 'success');
+  });
 
   config = await window.api.getConfig();
   let gamePath = config.gamePath || '';
@@ -233,3 +238,67 @@ $('modsPathInput').addEventListener('change', async () => {
 
 // Init
 init();
+
+// Particles
+const canvas = document.getElementById('particles-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+let animId;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function createParticle() {
+  const size = Math.random() * 2.5 + 0.5;
+  return {
+    x: Math.random() * canvas.width,
+    y: canvas.height + size,
+    size,
+    speedY: -(Math.random() * 0.4 + 0.1),
+    speedX: (Math.random() - 0.5) * 0.2,
+    opacity: Math.random() * 0.5 + 0.1,
+    hue: Math.random() > 0.3 ? 150 : 120,
+  };
+}
+
+for (let i = 0; i < 80; i++) {
+  const p = createParticle();
+  p.y = Math.random() * canvas.height;
+  particles.push(p);
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    p.x += p.speedX;
+    p.y += p.speedY;
+
+    if (p.y < -10) {
+      Object.assign(p, createParticle());
+      p.y = canvas.height + p.size;
+    }
+    if (p.x < -10) p.x = canvas.width + 10;
+    if (p.x > canvas.width + 10) p.x = -10;
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,255,136,${p.opacity * 0.6})`;
+    ctx.fill();
+
+    if (p.size > 1.5) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,255,136,${p.opacity * 0.08})`;
+      ctx.fill();
+    }
+  }
+
+  animId = requestAnimationFrame(animateParticles);
+}
+animateParticles();
