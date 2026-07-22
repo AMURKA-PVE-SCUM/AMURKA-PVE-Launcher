@@ -4,6 +4,7 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
+const { Client: RPCClient } = require('@xhayper/discord-rpc');
 
 const DOWNLOAD_CONCURRENCY = 4;
 
@@ -16,8 +17,10 @@ const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
 const WARGM_SHOP_URL = 'https://wargm.ru/server/77385/shop';
 const DISCORD_URL = 'https://discord.gg/CApw7CYBtA';
 const LOLKA_URL = 'https://lolka.gg/nmgHA2I';
+const RPC_CLIENT_ID = '760603147338753';
 
 let win;
+let rpc;
 
 function getConfig() {
   try {
@@ -353,6 +356,34 @@ ipcMain.handle('browse-folder', async (_, defaultPath) => {
   return result.filePaths[0];
 });
 
+function initRPC() {
+  try {
+    const client = new RPCClient({ clientId: RPC_CLIENT_ID });
+
+    client.on('ready', async () => {
+      try {
+        await client.user?.setActivity({
+          details: 'AMURKA PVE',
+          state: '212.22.93.89:20022',
+          startTimestamp: Date.now(),
+          largeImageKey: 'amurka',
+          largeImageText: 'AMURKA PVE',
+          instance: false,
+        });
+      } catch {}
+    });
+
+    client.on('disconnected', () => {
+      setTimeout(() => {
+        if (!rpc?.isConnected) initRPC();
+      }, 10000);
+    });
+
+    client.connect().catch(() => {});
+    rpc = client;
+  } catch {}
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 960,
@@ -378,5 +409,11 @@ ipcMain.on('window-minimize', () => win?.minimize());
 ipcMain.on('window-maximize', () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); });
 ipcMain.on('window-close', () => win?.close());
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  initRPC();
+});
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => {
+  if (rpc) { rpc.destroy().catch(() => {}); }
+});
