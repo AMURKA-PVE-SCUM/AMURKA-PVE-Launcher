@@ -5,6 +5,7 @@ const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
 const { Client: RPCClient } = require('@xhayper/discord-rpc');
+const { autoUpdater } = require('electron-updater');
 
 const DOWNLOAD_CONCURRENCY = 4;
 
@@ -12,6 +13,7 @@ const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const APP_NAME = 'AMURKA PVE MOD';
 const SERVER_IP = '212.22.93.89:20022';
 const GITHUB_REPO = 'AMURKA-PVE-SCUM/amurka-pve-mods';
+const LAUNCHER_REPO = 'AMURKA-PVE-SCUM/AMURKA-PVE-Launcher';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
 const WARGM_SHOP_URL = 'https://wargm.ru/server/77385/shop';
@@ -360,13 +362,13 @@ function initRPC() {
   try {
     const client = new RPCClient({ clientId: RPC_CLIENT_ID });
 
-    client.on('ready', async () => {
+    client.on('connected', async () => {
       try {
         await client.user?.setActivity({
           details: 'AMURKA PVE',
           state: '212.22.93.89:20022',
           startTimestamp: Date.now(),
-          largeImageKey: 'amurka',
+          largeImageKey: 'AMURKA',
           largeImageText: 'AMURKA PVE',
           instance: false,
         });
@@ -382,6 +384,39 @@ function initRPC() {
     client.connect().catch(() => {});
     rpc = client;
   } catch {}
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('Update available:', info.version);
+    win?.webContents.send('update-available', info.version);
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('No updates available');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    win?.webContents.send('update-progress', progress.percent);
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    console.log('Update downloaded, installing on quit');
+    win?.webContents.send('update-downloaded');
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.log('Update error:', err.message);
+  });
+
+  ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.checkForUpdatesAndNotify();
 }
 
 function createWindow() {
@@ -412,6 +447,7 @@ ipcMain.on('window-close', () => win?.close());
 app.whenReady().then(() => {
   createWindow();
   initRPC();
+  setTimeout(setupAutoUpdater, 3000);
 });
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
