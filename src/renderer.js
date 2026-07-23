@@ -236,6 +236,40 @@ $('modsPathInput').addEventListener('change', async () => {
   await scanInstalled();
 });
 
+// Auto-update UI
+let updateVersion = '';
+const updateBanner = $('updateBanner');
+const updateText = $('updateText');
+const updateProgress = $('updateProgress');
+const updateProgressFill = $('updateProgressFill');
+const updateActionBtn = $('updateActionBtn');
+
+window.api.onUpdateAvailable((version) => {
+  updateVersion = version;
+  updateText.textContent = `Доступно обновление v${version}`;
+  updateActionBtn.textContent = 'Скачать';
+  updateActionBtn.onclick = () => {
+    updateActionBtn.disabled = true;
+    updateActionBtn.textContent = 'Загрузка...';
+    updateProgress.style.display = 'block';
+    window.api.downloadUpdate();
+  };
+  updateBanner.style.display = 'flex';
+});
+
+window.api.onUpdateProgress((pct) => {
+  updateProgressFill.style.width = pct + '%';
+  updateActionBtn.textContent = pct < 100 ? `Загрузка ${Math.round(pct)}%` : 'Скачано';
+});
+
+window.api.onUpdateDownloaded(() => {
+  updateActionBtn.disabled = false;
+  updateActionBtn.textContent = 'Установить';
+  updateText.textContent = 'Обновление скачано';
+  updateProgress.style.display = 'none';
+  updateActionBtn.onclick = () => window.api.installUpdate();
+});
+
 // Init
 init();
 

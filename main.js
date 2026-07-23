@@ -387,8 +387,8 @@ function initRPC() {
 }
 
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('update-available', (info) => {
     console.log('Update available:', info.version);
@@ -404,7 +404,7 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', () => {
-    console.log('Update downloaded, installing on quit');
+    console.log('Update downloaded');
     win?.webContents.send('update-downloaded');
   });
 
@@ -412,11 +412,15 @@ function setupAutoUpdater() {
     console.log('Update error:', err.message);
   });
 
+  ipcMain.handle('download-update', () => {
+    autoUpdater.downloadUpdate();
+  });
+
   ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall();
   });
 
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdates();
 }
 
 function createWindow() {

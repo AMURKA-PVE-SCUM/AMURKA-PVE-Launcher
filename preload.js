@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, v) => cb(v)),
   onUpdateProgress: (cb) => ipcRenderer.on('update-progress', (_, p) => cb(p)),

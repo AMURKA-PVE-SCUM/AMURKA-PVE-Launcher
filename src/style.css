@@ -418,6 +418,42 @@ html, body {
 .toast.error { border-color: rgba(255,71,87,0.4); color: var(--danger); }
 .toast.success { border-color: rgba(0,255,136,0.4); color: var(--accent); box-shadow: 0 0 20px rgba(0,255,136,0.1); }
 
+/* Update Banner */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, rgba(108,92,231,0.15), rgba(0,255,136,0.05));
+  border-bottom: 1px solid rgba(108,92,231,0.2);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.update-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: var(--text2);
+}
+.update-icon { font-size: 13px; }
+.update-progress { flex: 1; max-width: 200px; }
+.progress-bar.thin { height: 3px; }
+.update-btn {
+  padding: 5px 14px;
+  border: 1px solid rgba(108,92,231,0.3);
+  background: rgba(108,92,231,0.15);
+  color: var(--purple);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+}
+.update-btn:hover { background: rgba(108,92,231,0.3); }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
