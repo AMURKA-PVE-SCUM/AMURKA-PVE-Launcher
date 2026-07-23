@@ -17,7 +17,7 @@ const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
 const WARGM_SHOP_URL = 'https://wargm.ru/server/77385/shop';
 const DISCORD_URL = 'https://discord.gg/CApw7CYBtA';
 const LOLKA_URL = 'https://lolka.gg/nmgHA2I';
-const RPC_CLIENT_ID = '760603147338753';
+const RPC_CLIENT_ID = '1481533187732668476';
 
 let win;
 let rpc;
