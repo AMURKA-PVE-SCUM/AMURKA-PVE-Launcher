@@ -11,7 +11,7 @@ const DOWNLOAD_CONCURRENCY = 4;
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const APP_NAME = 'AMURKA PVE MOD';
-const SERVER_IP = '212.22.93.89:20022';
+const SERVER_IP = '85.88.179.207:7004';
 const GITHUB_REPO = 'AMURKA-PVE-SCUM/amurka-pve-mods';
 const LAUNCHER_REPO = 'AMURKA-PVE-SCUM/AMURKA-PVE-Launcher';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
@@ -366,10 +366,10 @@ function initRPC() {
       try {
         await client.user?.setActivity({
           details: 'AMURKA PVE',
-          state: '212.22.93.89:20022',
+          state: '85.88.179.207:7004',
           startTimestamp: Date.now(),
           largeImageKey: 'AMURKA',
-          largeImageText: 'AMURKA PVE',
+          largeImageText: '85.88.179.207:7004',
           instance: false,
         });
       } catch {}
