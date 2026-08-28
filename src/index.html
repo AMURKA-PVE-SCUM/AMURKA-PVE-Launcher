@@ -24,18 +24,25 @@
     </div>
   </div>
 
-  <!-- Update Banner -->
-  <div class="update-banner" id="updateBanner" style="display:none">
-    <div class="update-info" id="updateInfo">
-      <span class="update-icon">🔄</span>
-      <span id="updateText">Доступно обновление</span>
-    </div>
-    <div class="update-progress" id="updateProgress" style="display:none">
-      <div class="progress-bar thin">
-        <div class="progress-fill" id="updateProgressFill"></div>
+  <!-- Update Modal -->
+  <div class="update-overlay" id="updateOverlay" style="display:none">
+    <div class="update-modal" id="updateModal">
+      <div class="update-modal-icon">🔄</div>
+      <div class="update-modal-title" id="updateTitle">Доступно обновление</div>
+      <div class="update-modal-version" id="updateVersion">v2.1.3</div>
+      <div class="update-modal-desc" id="updateDesc">Нажмите «Скачать», чтобы получить новую версию</div>
+      <div class="update-modal-progress" id="updateModalProgress" style="display:none">
+        <div class="progress-bar modal">
+          <div class="progress-fill" id="updateModalProgressFill"></div>
+        </div>
+        <div class="progress-label" id="updateModalProgressLabel">0%</div>
+      </div>
+      <div class="update-modal-actions">
+        <button class="btn btn-download" id="updateDownloadBtn">📥 Скачать</button>
+        <button class="btn btn-install" id="updateInstallBtn" style="display:none">🔄 Установить</button>
+        <button class="btn btn-later" id="updateLaterBtn">Позже</button>
       </div>
     </div>
-    <button class="update-btn" id="updateActionBtn">Скачать</button>
   </div>
 
   <div class="app-container">
@@ -78,12 +85,17 @@
         </button>
         <button class="btn btn-accent" id="downloadBtn">
           <span class="btn-icon">⬇</span>
-          СКАЧАТЬ ВСЕ МОДЫ
+          СКАЧАТЬ ВЫБРАННОЕ
         </button>
         <button class="btn btn-danger" id="deleteBtn">
           <span class="btn-icon">✕</span>
           УДАЛИТЬ ВСЕ МОДЫ
         </button>
+      </div>
+
+      <div class="mod-categories">
+        <div class="mode-label">Категории модов</div>
+        <div class="cat-row" id="catRow"></div>
       </div>
 
       <div class="launch-mode">
@@ -133,12 +145,12 @@
           <span class="link-icon">🛒</span>
           <span>Магазин</span>
         </button>
-        <button class="link-btn discord" onclick="window.api.openUrl('https://discord.gg/CApw7CYBtA')">
-          <span class="link-icon">💬</span>
-          <span>Discord</span>
+        <button class="link-btn website" onclick="window.api.openUrl('https://amurka-pve-scum.github.io/')">
+          <span class="link-icon">🌐</span>
+          <span>Сайт</span>
         </button>
         <button class="link-btn lolka" onclick="window.api.openUrl('https://lolka.gg/nmgHA2I')">
-          <span class="link-icon">🎁</span>
+          <span class="link-icon">💬</span>
           <span>Lolka</span>
         </button>
       </div>

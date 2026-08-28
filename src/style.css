@@ -287,6 +287,59 @@ html, body {
 }
 .mode-btn:hover:not(.active) { color: var(--text); }
 
+/* Mod Categories */
+.mod-categories { margin-top: 8px; }
+.cat-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--card-border);
+  background: rgba(0,0,0,0.3);
+  color: var(--text2);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+.cat-chip .cat-count {
+  font-size: 9px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 1px 6px;
+  color: var(--text3);
+}
+.cat-chip:not(.locked):hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+.cat-chip.active {
+  background: var(--accent-dim);
+  border-color: rgba(0,255,136,0.3);
+  color: var(--accent);
+}
+.cat-chip.active .cat-count {
+  background: rgba(0,255,136,0.15);
+  color: var(--accent);
+}
+.cat-chip.locked {
+  background: var(--accent-dim);
+  border-color: rgba(0,255,136,0.3);
+  color: var(--accent);
+  cursor: default;
+}
+.cat-chip.locked .cat-count {
+  background: rgba(0,255,136,0.15);
+  color: var(--accent);
+}
+
 /* Footer */
 .footer {
   font-size: 10px;
@@ -375,8 +428,8 @@ html, body {
 .link-icon { font-size: 14px; }
 .link-btn.vote { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(108,92,231,0.15); }
 .link-btn.shop { background: rgba(253,203,110,0.1); color: var(--yellow); border: 1px solid rgba(253,203,110,0.15); }
-.link-btn.discord { background: rgba(88,101,242,0.1); color: var(--discord); border: 1px solid rgba(88,101,242,0.15); }
-.link-btn.lolka { background: rgba(255,118,117,0.1); color: var(--orange); border: 1px solid rgba(255,118,117,0.15); }
+.link-btn.website { background: rgba(0,255,136,0.1); color: var(--accent); border: 1px solid rgba(0,255,136,0.15); }
+.link-btn.lolka { background: rgba(88,101,242,0.1); color: var(--discord); border: 1px solid rgba(88,101,242,0.15); }
 
 /* Wargm Banner */
 .wargm-banner {
@@ -418,41 +471,120 @@ html, body {
 .toast.error { border-color: rgba(255,71,87,0.4); color: var(--danger); }
 .toast.success { border-color: rgba(0,255,136,0.4); color: var(--accent); box-shadow: 0 0 20px rgba(0,255,136,0.1); }
 
-/* Update Banner */
-.update-banner {
+/* Update Modal */
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: linear-gradient(90deg, rgba(108,92,231,0.15), rgba(0,255,136,0.05));
-  border-bottom: 1px solid rgba(108,92,231,0.2);
-  font-size: 11px;
-  flex-shrink: 0;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease;
 }
-.update-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  color: var(--text2);
-}
-.update-icon { font-size: 13px; }
-.update-progress { flex: 1; max-width: 200px; }
-.progress-bar.thin { height: 3px; }
-.update-btn {
-  padding: 5px 14px;
+.update-modal {
+  background: linear-gradient(145deg, rgba(20,20,30,0.98), rgba(10,10,15,0.98));
   border: 1px solid rgba(108,92,231,0.3);
-  background: rgba(108,92,231,0.15);
-  color: var(--purple);
+  border-radius: 16px;
+  padding: 32px 40px;
+  width: 380px;
+  max-width: 90vw;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(108,92,231,0.2), 0 0 120px rgba(0,255,136,0.05);
+  animation: modalSlideIn 0.35s ease;
+}
+.update-modal-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+.update-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.update-modal-version {
+  font-size: 28px;
+  font-weight: 900;
+  font-family: 'Orbitron', sans-serif;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+.update-modal-desc {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 20px;
+}
+.update-modal-progress {
+  margin-bottom: 16px;
+}
+.progress-bar.modal {
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar.modal .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+}
+.update-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.btn-download {
+  background: linear-gradient(135deg, var(--accent), #00cc6a);
+  color: #0a0a0a;
+  padding: 10px 24px;
+  border: none;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 0 20px rgba(0,255,136,0.2);
+}
+.btn-download:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-install {
+  background: linear-gradient(135deg, var(--purple), #8b7cf7);
+  color: #fff;
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 0 20px rgba(108,92,231,0.2);
+}
+.btn-install:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-later {
+  background: transparent;
+  color: var(--text2);
+  padding: 10px 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   font-family: 'Inter', sans-serif;
-  white-space: nowrap;
 }
-.update-btn:hover { background: rgba(108,92,231,0.3); }
+.btn-later:hover { border-color: var(--text2); color: var(--text); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 3px; }

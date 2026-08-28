@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
@@ -10,14 +11,16 @@ const { autoUpdater } = require('electron-updater');
 const DOWNLOAD_CONCURRENCY = 4;
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
+const CONFIG_BACKUP = path.join(os.homedir(), '.amurka', 'config.json');
 const APP_NAME = 'AMURKA PVE MOD';
 const SERVER_IP = '85.88.179.207:7004';
-const GITHUB_REPO = 'AMURKA-PVE-SCUM/amurka-pve-mods';
 const LAUNCHER_REPO = 'AMURKA-PVE-SCUM/AMURKA-PVE-Launcher';
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const YANDEX_PUBLIC_LINK = 'https://disk.yandex.ru/d/C0uZOmxjQJ6udA';
+const YANDEX_PUBLIC_KEY = 'C0uZOmxjQJ6udA';
+const YANDEX_API = 'https://cloud-api.yandex.net/v1/disk/public/resources';
 const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
 const WARGM_SHOP_URL = 'https://wargm.ru/server/77385/shop';
-const DISCORD_URL = 'https://discord.gg/CApw7CYBtA';
+const SITE_URL = 'https://amurka-pve-scum.github.io/';
 const LOLKA_URL = 'https://lolka.gg/nmgHA2I';
 const RPC_CLIENT_ID = '1481533187732668476';
 
@@ -25,21 +28,29 @@ let win;
 let rpc;
 
 function getConfig() {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-    }
-  } catch {}
+  for (const p of [CONFIG_FILE, CONFIG_BACKUP]) {
+    try {
+      if (fs.existsSync(p)) {
+        const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
+        if (data && Object.keys(data).length) return data;
+      }
+    } catch {}
+  }
   return {};
 }
 
 function saveConfig(data) {
   try {
-    const dir = path.dirname(CONFIG_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const existing = getConfig();
     Object.assign(existing, data);
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(existing, null, 2));
+    const json = JSON.stringify(existing, null, 2);
+    for (const p of [CONFIG_FILE, CONFIG_BACKUP]) {
+      try {
+        const dir = path.dirname(p);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(p, json);
+      } catch {}
+    }
     return true;
   } catch { return false; }
 }
@@ -221,55 +232,52 @@ ipcMain.handle('get-constants', () => ({
   appName: APP_NAME,
   wargmVote: WARGM_VOTE_URL,
   wargmShop: WARGM_SHOP_URL,
-  discord: DISCORD_URL,
+  site: SITE_URL,
   lolka: LOLKA_URL,
+  categories: CATEGORIES,
 }));
 
 ipcMain.handle('detect-scum', () => autoDetectScum());
 ipcMain.handle('find-game-exe', (_, gamePath) => scumExePath(gamePath));
 ipcMain.handle('get-mods-path', (_, gamePath) => modsPathFor(gamePath));
 
+const CATEGORIES = [
+  { id: 'core', label: 'Основные', required: true },
+  { id: 'speed', label: 'Скорость транспорта', required: false },
+  { id: 'skins', label: 'Скины одежды', required: false },
+  { id: 'weapons', label: 'Скины на оружие', required: false },
+];
+
 ipcMain.handle('fetch-mods', async () => {
-  const contentsUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents`;
-  const releaseUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+  const mods = [];
 
-  const [contentsRaw, releaseRaw] = await Promise.all([
-    httpsGet(contentsUrl, GITHUB_TOKEN).catch(() => '[]'),
-    httpsGet(releaseUrl, GITHUB_TOKEN).catch(() => null),
-  ]);
-
-  const modMap = new Map();
-
-  const contentsItems = JSON.parse(contentsRaw);
-  for (const item of contentsItems) {
-    if (item.type === 'file' && item.name.toLowerCase().endsWith('.pak')) {
-      modMap.set(item.name, {
-        name: item.name,
-        downloadUrl: `https://raw.githubusercontent.com/${GITHUB_REPO}/main/${item.name}`,
-        size: item.size,
-      });
+  for (const cat of CATEGORIES) {
+    const url = `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&path=${encodeURIComponent('/' + cat.id)}&limit=100`;
+    let items = [];
+    try {
+      const raw = await httpsGet(url);
+      const data = JSON.parse(raw);
+      items = (data._embedded && data._embedded.items) || [];
+    } catch (e) {
+      items = [];
+    }
+    for (const item of items) {
+      if (item.type === 'file' && item.name.toLowerCase().endsWith('.pak')) {
+        mods.push({
+          name: item.name,
+          downloadUrl: item.file,
+          size: item.size,
+          category: cat.id,
+        });
+      }
     }
   }
 
-  if (releaseRaw) {
-    try {
-      const release = JSON.parse(releaseRaw);
-      if (release.assets) {
-        for (const asset of release.assets) {
-          if (asset.name === 'ImprovedMap.pak') continue;
-          if (asset.name.toLowerCase().endsWith('.pak')) {
-            modMap.set(asset.name, {
-              name: asset.name,
-              downloadUrl: asset.browser_download_url,
-              size: asset.size,
-            });
-          }
-        }
-      }
-    } catch {}
+  if (!mods.length) {
+    throw new Error('Не удалось получить список модов с Яндекс Диска');
   }
 
-  return [...modMap.values()];
+  return mods;
 });
 
 ipcMain.handle('scan-mods', (_, modsPath) => {

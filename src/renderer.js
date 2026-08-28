@@ -2,6 +2,8 @@ let config = {};
 let availableMods = [];
 let installedMods = [];
 let downloadInProgress = false;
+let categories = [];
+let selectedCategories = {};
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,6 +24,40 @@ function setStatus(text, ok = true) {
 function updateCounts() {
   $('availableCount').textContent = availableMods.length;
   $('installedCount').textContent = installedMods.length;
+  updateCatCounts();
+}
+
+function selectedMods() {
+  return availableMods.filter((m) => selectedCategories[m.category]);
+}
+
+function updateCatCounts() {
+  for (const cat of categories) {
+    const el = $('catCount-' + cat.id);
+    if (!el) continue;
+    const total = availableMods.filter((m) => m.category === cat.id).length;
+    const installed = installedMods.filter((m) => availableMods.some((a) => a.name === m.name && a.category === cat.id)).length;
+    el.textContent = installed > 0 ? `${installed}/${total}` : total;
+  }
+}
+
+function buildCategoryChips() {
+  const row = $('catRow');
+  row.innerHTML = '';
+  for (const cat of categories) {
+    const chip = document.createElement('button');
+    chip.className = 'cat-chip' + (cat.required ? ' locked active' : (selectedCategories[cat.id] ? ' active' : ''));
+    chip.dataset.cat = cat.id;
+    chip.innerHTML = `<span>${cat.label}</span><span class="cat-count" id="catCount-${cat.id}">0</span>`;
+    if (!cat.required) {
+      chip.addEventListener('click', async () => {
+        selectedCategories[cat.id] = !selectedCategories[cat.id];
+        chip.classList.toggle('active', selectedCategories[cat.id]);
+        await window.api.saveConfig({ categories: selectedCategories });
+      });
+    }
+    row.appendChild(chip);
+  }
 }
 
 function showProgress(show) {
@@ -52,7 +88,14 @@ async function init() {
     showToast('IP скопирован: ' + constants.serverIp, 'success');
   });
 
+  categories = constants.categories || [];
   config = await window.api.getConfig();
+  selectedCategories = Object.assign({}, config.categories);
+  for (const cat of categories) {
+    if (selectedCategories[cat.id] === undefined) selectedCategories[cat.id] = cat.required;
+  }
+  buildCategoryChips();
+
   let gamePath = config.gamePath || '';
 
   if (!gamePath || !(await window.api.findGameExe(gamePath))) {
@@ -60,32 +103,38 @@ async function init() {
     if (detected) gamePath = detected;
   }
 
-  config.gamePath = gamePath || 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\SCUM';
   config.modsPath = config.modsPath || '';
   config.launchMode = config.launchMode || 'dx11';
 
   // Set active mode button
   document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === config.launchMode));
 
+  config.gamePath = gamePath || '';
+  config.categories = selectedCategories;
+
   updatePaths();
   await window.api.saveConfig(config);
-  await loadMods();
+  if (config.gamePath && (await window.api.findGameExe(config.gamePath))) await loadMods();
 }
 
 async function updatePaths() {
-  $('gamePathInput').value = config.gamePath;
-  const exe = await window.api.findGameExe(config.gamePath);
+  $('gamePathInput').value = config.gamePath || '';
+  const exe = config.gamePath ? await window.api.findGameExe(config.gamePath) : null;
   const found = !!exe;
-  $('gameStatus').innerHTML = `<span class="status-dot small" style="background:${found ? 'var(--accent2)' : 'var(--danger)'}"></span><span>${found ? 'SCUM найден' : 'SCUM не найден'}</span>`;
+  $('gameStatus').innerHTML = `<span class="status-dot small" style="background:${found ? 'var(--accent2)' : 'var(--danger)'}"></span><span>${found ? 'SCUM найден' : config.gamePath ? 'SCUM не найден' : 'Укажите путь к SCUM'}</span>`;
 
-  if (!config.modsPath) {
+  if (found && !config.modsPath) {
     config.modsPath = await window.api.getModsPath(config.gamePath);
     await window.api.saveConfig(config);
   }
-  $('modsPathInput').value = config.modsPath;
+  $('modsPathInput').value = config.modsPath || '';
 }
 
 async function loadMods() {
+  if (!config.gamePath || !config.modsPath) {
+    setStatus('Настройте пути установки', false);
+    return;
+  }
   setStatus('Загрузка списка модов...');
   showProgress(true);
   updateProgress(0, 'Подключение к GitHub...');
@@ -110,8 +159,9 @@ async function scanInstalled() {
 // Download
 $('downloadBtn').addEventListener('click', async () => {
   if (downloadInProgress) return;
-  if (!availableMods.length) {
-    showToast('Список модов пуст. Подождите загрузки.', 'error');
+  const toDownload = selectedMods();
+  if (!toDownload.length) {
+    showToast('Нет модов в выбранных категориях', 'error');
     return;
   }
 
@@ -126,7 +176,7 @@ $('downloadBtn').addEventListener('click', async () => {
   });
 
   try {
-    const result = await window.api.downloadAllMods(availableMods, config.modsPath);
+    const result = await window.api.downloadAllMods(toDownload, config.modsPath);
     await scanInstalled();
     if (result.success > 0) {
       showToast(`✅ Скачано: ${result.success}, ошибок: ${result.errors}`, 'success');
@@ -236,38 +286,51 @@ $('modsPathInput').addEventListener('change', async () => {
   await scanInstalled();
 });
 
-// Auto-update UI
+// Auto-update Modal
 let updateVersion = '';
-const updateBanner = $('updateBanner');
-const updateText = $('updateText');
-const updateProgress = $('updateProgress');
-const updateProgressFill = $('updateProgressFill');
-const updateActionBtn = $('updateActionBtn');
+const updateOverlay = $('updateOverlay');
+const updateTitle = $('updateTitle');
+const updateVersionEl = $('updateVersion');
+const updateDesc = $('updateDesc');
+const updateModalProgress = $('updateModalProgress');
+const updateModalProgressFill = $('updateModalProgressFill');
+const updateModalProgressLabel = $('updateModalProgressLabel');
+const updateDownloadBtn = $('updateDownloadBtn');
+const updateInstallBtn = $('updateInstallBtn');
+const updateLaterBtn = $('updateLaterBtn');
 
 window.api.onUpdateAvailable((version) => {
   updateVersion = version;
-  updateText.textContent = `Доступно обновление v${version}`;
-  updateActionBtn.textContent = 'Скачать';
-  updateActionBtn.onclick = () => {
-    updateActionBtn.disabled = true;
-    updateActionBtn.textContent = 'Загрузка...';
-    updateProgress.style.display = 'block';
+  updateTitle.textContent = 'Доступно обновление';
+  updateVersionEl.textContent = `v${version}`;
+  updateDesc.textContent = 'Нажмите «Скачать», чтобы получить новую версию';
+  updateDownloadBtn.style.display = '';
+  updateInstallBtn.style.display = 'none';
+  updateModalProgress.style.display = 'none';
+  updateDownloadBtn.onclick = () => {
+    updateDownloadBtn.disabled = true;
+    updateDownloadBtn.textContent = 'Загрузка...';
+    updateModalProgress.style.display = 'block';
     window.api.downloadUpdate();
   };
-  updateBanner.style.display = 'flex';
+  updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
+  updateOverlay.style.display = 'flex';
 });
 
 window.api.onUpdateProgress((pct) => {
-  updateProgressFill.style.width = pct + '%';
-  updateActionBtn.textContent = pct < 100 ? `Загрузка ${Math.round(pct)}%` : 'Скачано';
+  updateModalProgressFill.style.width = pct + '%';
+  updateModalProgressLabel.textContent = `${Math.round(pct)}%`;
+  updateDownloadBtn.textContent = `Загрузка ${Math.round(pct)}%`;
 });
 
 window.api.onUpdateDownloaded(() => {
-  updateActionBtn.disabled = false;
-  updateActionBtn.textContent = 'Установить';
-  updateText.textContent = 'Обновление скачано';
-  updateProgress.style.display = 'none';
-  updateActionBtn.onclick = () => window.api.installUpdate();
+  updateDownloadBtn.style.display = 'none';
+  updateInstallBtn.style.display = '';
+  updateTitle.textContent = 'Обновление скачано';
+  updateDesc.textContent = 'Нажмите «Установить», чтобы применить обновление';
+  updateModalProgress.style.display = 'none';
+  updateInstallBtn.onclick = () => window.api.installUpdate();
+  updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
 });
 
 // Init
