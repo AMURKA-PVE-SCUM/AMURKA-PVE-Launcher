@@ -4,7 +4,7 @@
 
 ### Шаг 1. Скачай лаунчер
 
-Перейди в [Releases](https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest) и скачай файл `AMURKA-PVE-Launcher-Setup-2.1.6.exe` (или какая версия актуальна).
+Перейди по ссылке **Yandex Диск**: [AMURKA Mods](https://disk.yandex.ru/d/C0uZOmxjQJ6udA), открой папку, скачай файл `AMURKA-PVE-Launcher-Setup-2.1.8.exe` (или какая версия актуальна).
 
 ### Шаг 2. Установи
 
