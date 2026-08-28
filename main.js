@@ -6,7 +6,6 @@ const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
 const { Client: RPCClient } = require('@xhayper/discord-rpc');
-const { autoUpdater } = require('electron-updater');
 
 const DOWNLOAD_CONCURRENCY = 4;
 
@@ -394,41 +393,92 @@ function initRPC() {
   } catch {}
 }
 
-function setupAutoUpdater() {
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
+let updateInfo = null;
+let updateInstallerPath = null;
 
-  autoUpdater.on('update-available', (info) => {
-    console.log('Update available:', info.version);
+function yandexUrl() {
+  return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&limit=100`;
+}
+
+function yandexFileUrl(fileName) {
+  return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&path=${encodeURIComponent('/' + fileName)}`;
+}
+
+async function yandexResolveFile(fileName) {
+  const raw = await httpsGet(yandexFileUrl(fileName));
+  const data = JSON.parse(raw);
+  return { name: data.name, downloadUrl: data.file, size: data.size };
+}
+
+function normalizeVersion(v) {
+  return String(v || '').trim().replace(/^v/i, '');
+}
+
+function isNewerVersion(next, current) {
+  const a = normalizeVersion(next || '').split('.').map((p) => parseInt(p, 10) || 0);
+  const b = normalizeVersion(current || '').split('.').map((p) => parseInt(p, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0, y = b[i] || 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+}
+
+async function checkForUpdateFromYandex() {
+  try {
+    const meta = await yandexResolveFile('launcher.json');
+    const raw = await httpsGet(meta.downloadUrl);
+    const info = JSON.parse(raw);
+    if (!info.version || !info.file) return;
+
+    if (!isNewerVersion(info.version, app.getVersion())) {
+      console.log('No updates available');
+      return;
+    }
+
+    updateInfo = info;
     win?.webContents.send('update-available', info.version);
-  });
+  } catch (e) {
+    console.log('Update check failed:', e.message);
+  }
+}
 
-  autoUpdater.on('update-not-available', () => {
-    console.log('No updates available');
-  });
+function setupAutoUpdater() {
+  checkForUpdateFromYandex();
 
-  autoUpdater.on('download-progress', (progress) => {
-    win?.webContents.send('update-progress', progress.percent);
-  });
+  async function downloadFromYandex() {
+    if (!updateInfo) return;
+    const dest = path.join(app.getPath('userData'), 'update-installer.exe');
+    updateInstallerPath = dest;
+    let meta;
+    try {
+      meta = await yandexResolveFile(updateInfo.file);
+    } catch (e) {
+      console.log('Update download failed:', e.message);
+      return;
+    }
+    let total = meta.size || updateInfo.size || 0;
+    try {
+      await httpsDownload(meta.downloadUrl, dest, (downloaded) => {
+        if (total) win?.webContents.send('update-progress', Math.min(100, Math.round(downloaded / total * 100)));
+      });
+      win?.webContents.send('update-downloaded');
+    } catch (e) {
+      console.log('Update download error:', e.message);
+    }
+  }
 
-  autoUpdater.on('update-downloaded', () => {
-    console.log('Update downloaded');
-    win?.webContents.send('update-downloaded');
-  });
+  async function installYandex() {
+    if (updateInstallerPath && fs.existsSync(updateInstallerPath)) {
+      spawn(updateInstallerPath, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+    }
+    app.quit();
+  }
 
-  autoUpdater.on('error', (err) => {
-    console.log('Update error:', err.message);
-  });
-
-  ipcMain.handle('download-update', () => {
-    autoUpdater.downloadUpdate();
-  });
-
-  ipcMain.handle('install-update', () => {
-    autoUpdater.quitAndInstall();
-  });
-
-  autoUpdater.checkForUpdates();
+  ipcMain.handle('download-update', () => downloadFromYandex());
+  ipcMain.handle('install-update', () => installYandex());
+  ipcMain.handle('check-update', () => checkForUpdateFromYandex());
 }
 
 function createWindow() {
