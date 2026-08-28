@@ -16,6 +16,7 @@ const SERVER_IP = '85.88.179.207:7004';
 const LAUNCHER_REPO = 'AMURKA-PVE-SCUM/AMURKA-PVE-Launcher';
 const YANDEX_PUBLIC_LINK = 'https://disk.yandex.ru/d/C0uZOmxjQJ6udA';
 const YANDEX_PUBLIC_KEY = 'C0uZOmxjQJ6udA';
+const YANDEX_UPDATE_LINK = 'https://disk.yandex.ru/d/-b-jrdq2S2ordg';
 const YANDEX_API = 'https://cloud-api.yandex.net/v1/disk/public/resources';
 const WARGM_VOTE_URL = 'https://wargm.ru/server/77385/votes';
 const WARGM_SHOP_URL = 'https://wargm.ru/server/77385/shop';
@@ -396,12 +397,8 @@ function initRPC() {
 let updateInfo = null;
 let updateInstallerPath = null;
 
-function yandexUrl() {
-  return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&limit=100`;
-}
-
 function yandexFileUrl(fileName) {
-  return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&path=${encodeURIComponent('/' + fileName)}`;
+  return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_UPDATE_LINK)}&path=${encodeURIComponent('/' + fileName)}`;
 }
 
 async function yandexResolveFile(fileName) {
