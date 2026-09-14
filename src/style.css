@@ -348,6 +348,14 @@ html, body {
   margin-top: 6px;
 }
 .highlight { color: var(--purple); font-weight: 600; }
+.upd-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #555;
+  margin-left: 6px;
+  vertical-align: middle;
+}
 
 /* Right Panel */
 .section-title {

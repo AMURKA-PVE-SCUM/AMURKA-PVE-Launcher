@@ -230,6 +230,7 @@ ipcMain.handle('save-config', (_, data) => saveConfig(data));
 ipcMain.handle('get-constants', () => ({
   serverIp: SERVER_IP,
   appName: APP_NAME,
+  appVersion: app.getVersion(),
   wargmVote: WARGM_VOTE_URL,
   wargmShop: WARGM_SHOP_URL,
   site: SITE_URL,
@@ -397,6 +398,7 @@ function initRPC() {
 let updateInfo = null;
 let updateInstallerPath = null;
 let lastNotifiedVersion = null;
+const DEV_CURRENT_VERSION = '2.1.9';
 
 function yandexFileUrl(fileName) {
   return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_UPDATE_LINK)}&path=${encodeURIComponent('/' + fileName)}`;
@@ -428,10 +430,15 @@ async function checkForUpdateFromYandex() {
     const meta = await yandexResolveFile('launcher.json');
     const raw = await httpsGet(meta.downloadUrl);
     const info = JSON.parse(raw);
-    if (!info.version || !info.file) return;
+    if (!info.version || !info.file) {
+      sendUpdateStatus({ ok: true, update: false });
+      return;
+    }
 
-    if (!isNewerVersion(info.version, app.getVersion())) {
+    const currentVersion = app.isPackaged ? app.getVersion() : DEV_CURRENT_VERSION;
+    if (!isNewerVersion(info.version, currentVersion)) {
       console.log('No updates available');
+      sendUpdateStatus({ ok: true, update: false, version: info.version });
       return;
     }
 
@@ -439,10 +446,16 @@ async function checkForUpdateFromYandex() {
 
     lastNotifiedVersion = info.version;
     updateInfo = info;
+    sendUpdateStatus({ ok: true, update: true, version: info.version });
     if (win && !win.isDestroyed()) win.webContents.send('update-available', info.version);
   } catch (e) {
     console.log('Update check failed:', e.message);
+    sendUpdateStatus({ ok: false, error: e.message });
   }
+}
+
+function sendUpdateStatus(data) {
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', data);
 }
 
 function setupAutoUpdater() {

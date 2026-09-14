@@ -103,6 +103,7 @@ function updateProgress(pct, file, downloaded, total) {
 async function init() {
   const constants = await window.api.getConstants();
   $('serverInfo').innerHTML = `SCUM Server | ${constants.serverIp} <span class="copy-icon">📋</span>`;
+  if (constants.appVersion) $('appVersion').textContent = 'v' + constants.appVersion;
 
   $('serverInfo').addEventListener('click', async () => {
     await window.api.copyText(constants.serverIp);
@@ -366,6 +367,12 @@ window.api.onUpdateDownloaded(() => {
   updateModalProgress.style.display = 'none';
   updateInstallBtn.onclick = () => window.api.installUpdate();
   updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
+});
+
+window.api.onUpdateStatus((s) => {
+  const dot = $('updDot');
+  dot.title = s.update ? 'Доступно обновление v' + s.version : s.ok ? 'Обновления: актуально' : 'Ошибка проверки обновлений';
+  dot.style.background = s.update ? 'var(--accent)' : s.ok ? 'var(--text3)' : 'var(--danger)';
 });
 
 setInterval(() => window.api.checkUpdate(), 60000);
