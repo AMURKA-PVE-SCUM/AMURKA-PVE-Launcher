@@ -333,7 +333,9 @@ const updateModalProgressFill = $('updateModalProgressFill');
 const updateModalProgressLabel = $('updateModalProgressLabel');
 const updateDownloadBtn = $('updateDownloadBtn');
 const updateInstallBtn = $('updateInstallBtn');
+const updateManualBtn = $('updateManualBtn');
 const updateLaterBtn = $('updateLaterBtn');
+let updateStarted = false;
 
 window.api.onUpdateAvailable((version) => {
   updateVersion = version;
@@ -342,13 +344,19 @@ window.api.onUpdateAvailable((version) => {
   updateDesc.textContent = 'Нажмите «Скачать», чтобы получить новую версию';
   updateDownloadBtn.style.display = '';
   updateInstallBtn.style.display = 'none';
+  updateManualBtn.style.display = 'none';
   updateModalProgress.style.display = 'none';
+  updateDownloadBtn.disabled = false;
+  updateDownloadBtn.textContent = '📥 Скачать';
+  updateStarted = false;
   updateDownloadBtn.onclick = () => {
+    updateStarted = true;
     updateDownloadBtn.disabled = true;
     updateDownloadBtn.textContent = 'Загрузка...';
     updateModalProgress.style.display = 'block';
     window.api.downloadUpdate();
   };
+  updateManualBtn.onclick = () => window.api.openUpdateManual();
   updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
   updateOverlay.style.display = 'flex';
 });
@@ -362,11 +370,32 @@ window.api.onUpdateProgress((pct) => {
 window.api.onUpdateDownloaded(() => {
   updateDownloadBtn.style.display = 'none';
   updateInstallBtn.style.display = '';
+  updateManualBtn.style.display = 'none';
   updateTitle.textContent = 'Обновление скачано';
   updateDesc.textContent = 'Нажмите «Установить», чтобы применить обновление';
   updateModalProgress.style.display = 'none';
   updateInstallBtn.onclick = () => window.api.installUpdate();
   updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
+});
+
+window.api.onUpdateError((e) => {
+  updateTitle.textContent = 'Ошибка загрузки';
+  updateDesc.textContent = e.message || 'Не удалось скачать обновление';
+  updateModalProgress.style.display = 'none';
+  updateManualBtn.style.display = '';
+  if (updateStarted) {
+    updateDownloadBtn.style.display = '';
+    updateDownloadBtn.disabled = false;
+    updateDownloadBtn.textContent = '🔄 Повторить';
+    updateStarted = false;
+    updateDownloadBtn.onclick = () => {
+      updateStarted = true;
+      updateDownloadBtn.disabled = true;
+      updateDownloadBtn.textContent = 'Загрузка...';
+      updateModalProgress.style.display = 'block';
+      window.api.downloadUpdate();
+    };
+  }
 });
 
 window.api.onUpdateStatus((s) => {

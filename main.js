@@ -213,14 +213,28 @@ function httpsDownload(url, destPath, onProgress) {
       let downloaded = startOffset;
 
       const file = fs.createWriteStream(destPath, { flags: startOffset > 0 ? 'r+' : 'w', start: startOffset });
+      let failed = false;
+      const fail = (e) => {
+        if (failed) return;
+        failed = true;
+        req.destroy();
+        file.close();
+        try { fs.unlinkSync(destPath); } catch {}
+        reject(e);
+      };
+      file.on('error', fail);
 
       res.on('data', (chunk) => {
+        if (failed) return;
         downloaded += chunk.length;
         file.write(chunk);
         if (onProgress && total) onProgress(downloaded, total);
       });
-      res.on('end', () => { file.end(); resolve(); });
-      res.on('error', (e) => { file.close(); if (!startOffset) try { fs.unlinkSync(destPath); } catch {} reject(e); });
+      res.on('end', () => {
+        file.end();
+        file.on('finish', () => resolve());
+      });
+      res.on('error', fail);
     });
     req.on('error', reject);
     req.setTimeout(60000, () => { req.destroy(); reject(new Error('Timeout')); });
@@ -472,6 +486,7 @@ function setupAutoUpdater() {
       meta = await yandexResolveFile(updateInfo.file);
     } catch (e) {
       console.log('Update download failed:', e.message);
+      win?.webContents.send('update-error', { message: 'Не удалось получить ссылку на файл: ' + e.message });
       return;
     }
     let total = meta.size || updateInfo.size || 0;
@@ -482,6 +497,7 @@ function setupAutoUpdater() {
       win?.webContents.send('update-downloaded');
     } catch (e) {
       console.log('Update download error:', e.message);
+      win?.webContents.send('update-error', { message: 'Ошибка загрузки: ' + e.message });
     }
   }
 
@@ -495,6 +511,11 @@ function setupAutoUpdater() {
   ipcMain.handle('download-update', () => downloadFromYandex());
   ipcMain.handle('install-update', () => installYandex());
   ipcMain.handle('check-update', () => checkForUpdateFromYandex());
+  ipcMain.handle('open-update-manual', async () => {
+    if (!updateInfo) return;
+    const meta = await yandexResolveFile(updateInfo.file);
+    shell.openExternal(meta.downloadUrl);
+  });
 }
 
 function createWindow() {
