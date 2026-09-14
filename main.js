@@ -155,6 +155,10 @@ function modsPathFor(gamePath) {
   return p2;
 }
 
+function parseJson(text) {
+  return JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim());
+}
+
 function httpsGet(url, token) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
@@ -257,7 +261,7 @@ ipcMain.handle('fetch-mods', async () => {
     let items = [];
     try {
       const raw = await httpsGet(url);
-      const data = JSON.parse(raw);
+      const data = parseJson(raw);
       items = (data._embedded && data._embedded.items) || [];
     } catch (e) {
       items = [];
@@ -406,7 +410,7 @@ function yandexFileUrl(fileName) {
 
 async function yandexResolveFile(fileName) {
   const raw = await httpsGet(yandexFileUrl(fileName));
-  const data = JSON.parse(raw);
+  const data = parseJson(raw);
   return { name: data.name, downloadUrl: data.file, size: data.size };
 }
 
@@ -429,7 +433,7 @@ async function checkForUpdateFromYandex() {
   try {
     const meta = await yandexResolveFile('launcher.json');
     const raw = await httpsGet(meta.downloadUrl);
-    const info = JSON.parse(raw);
+    const info = parseJson(raw);
     if (!info.version || !info.file) {
       sendUpdateStatus({ ok: true, update: false });
       return;
