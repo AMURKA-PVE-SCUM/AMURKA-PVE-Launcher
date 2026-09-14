@@ -336,7 +336,7 @@ const updateLaterBtn = $('updateLaterBtn');
 
 window.api.onUpdateAvailable((version) => {
   updateVersion = version;
-  updateTitle.textContent = 'Доступно обновление';
+  $('updateTitle').textContent = 'Доступно обновление';
   updateVersionEl.textContent = `v${version}`;
   updateDesc.textContent = 'Нажмите «Скачать», чтобы получить новую версию';
   updateDownloadBtn.style.display = '';
@@ -367,6 +367,8 @@ window.api.onUpdateDownloaded(() => {
   updateInstallBtn.onclick = () => window.api.installUpdate();
   updateLaterBtn.onclick = () => { updateOverlay.style.display = 'none'; };
 });
+
+setInterval(() => window.api.checkUpdate(), 60000);
 
 // Init
 init();

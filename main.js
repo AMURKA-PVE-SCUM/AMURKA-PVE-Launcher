@@ -396,6 +396,7 @@ function initRPC() {
 
 let updateInfo = null;
 let updateInstallerPath = null;
+let lastNotifiedVersion = null;
 
 function yandexFileUrl(fileName) {
   return `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_UPDATE_LINK)}&path=${encodeURIComponent('/' + fileName)}`;
@@ -434,16 +435,17 @@ async function checkForUpdateFromYandex() {
       return;
     }
 
+    if (info.version === lastNotifiedVersion) return;
+
+    lastNotifiedVersion = info.version;
     updateInfo = info;
-    win?.webContents.send('update-available', info.version);
+    if (win && !win.isDestroyed()) win.webContents.send('update-available', info.version);
   } catch (e) {
     console.log('Update check failed:', e.message);
   }
 }
 
 function setupAutoUpdater() {
-  checkForUpdateFromYandex();
-
   async function downloadFromYandex() {
     if (!updateInfo) return;
     const dest = path.join(app.getPath('userData'), 'update-installer.exe');
@@ -497,6 +499,8 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.setMenu(null);
+
+  win.webContents.on('did-finish-load', () => checkForUpdateFromYandex());
 }
 
 ipcMain.on('window-minimize', () => win?.minimize());
@@ -506,7 +510,7 @@ ipcMain.on('window-close', () => win?.close());
 app.whenReady().then(() => {
   createWindow();
   initRPC();
-  setTimeout(setupAutoUpdater, 3000);
+  setupAutoUpdater();
 });
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
