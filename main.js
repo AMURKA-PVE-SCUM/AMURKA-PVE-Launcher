@@ -267,6 +267,7 @@ const CATEGORIES = [
   { id: 'speed', label: 'Скорость транспорта', required: false },
   { id: 'skins', label: 'Скины одежды', required: false },
   { id: 'weapons', label: 'Скины на оружие', required: false },
+  { id: 'buildings', label: 'Скины на постройки', required: false },
 ];
 
 ipcMain.handle('fetch-mods', async () => {
