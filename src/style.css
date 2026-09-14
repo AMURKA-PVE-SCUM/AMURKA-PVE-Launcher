@@ -447,6 +447,81 @@ html, body {
 }
 .wargm-banner img:hover { opacity: 1; }
 
+/* New Mods Notification */
+.mods-notify {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  min-width: 420px;
+  max-width: 640px;
+  background: linear-gradient(135deg, rgba(9,28,20,0.95), rgba(15,15,25,0.95));
+  border: 1px solid rgba(0,255,136,0.35);
+  border-radius: var(--radius);
+  box-shadow: 0 0 30px rgba(0,255,136,0.15), 0 8px 30px rgba(0,0,0,0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: modsSlideIn 0.35s ease;
+}
+.mods-notify-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.mods-notify-body {
+  flex: 1;
+  min-width: 0;
+}
+.mods-notify-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.3px;
+}
+.mods-notify-desc {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mods-notify-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.mods-notify-btn {
+  background: transparent;
+  color: var(--text2);
+  padding: 8px 16px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+.mods-notify-btn.download {
+  background: linear-gradient(135deg, var(--accent), #00cc6a);
+  border: none;
+  color: #0a0a0a;
+  box-shadow: 0 0 16px rgba(0,255,136,0.25);
+}
+.mods-notify-btn.download:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.mods-notify-btn.download:disabled { opacity: 0.5; pointer-events: none; }
+.mods-notify-btn.later:hover { border-color: var(--text2); color: var(--text); }
+@keyframes modsSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Toast */
 .toast {
   position: fixed;

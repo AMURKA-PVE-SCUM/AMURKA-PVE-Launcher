@@ -2,6 +2,7 @@ let config = {};
 let availableMods = [];
 let installedMods = [];
 let downloadInProgress = false;
+let notifyMods = [];
 let categories = [];
 let selectedCategories = {};
 
@@ -36,9 +37,29 @@ function updateCatCounts() {
     const el = $('catCount-' + cat.id);
     if (!el) continue;
     const total = availableMods.filter((m) => m.category === cat.id).length;
-    const installed = installedMods.filter((m) => availableMods.some((a) => a.name === m.name && a.category === cat.id)).length;
+    const installed = installedMods.filter((n) => availableMods.some((a) => a.name === n && a.category === cat.id)).length;
     el.textContent = installed > 0 ? `${installed}/${total}` : total;
   }
+}
+
+function refreshModsBanner() {
+  if (!availableMods.length) return;
+  const installedSet = new Set(installedMods.map(String));
+  notifyMods = availableMods.filter((m) => !installedSet.has(m.name));
+  if (!notifyMods.length) {
+    $('modsNotify').style.display = 'none';
+    return;
+  }
+  const byCat = {};
+  for (const m of notifyMods) {
+    const cat = categories.find((c) => c.id === m.category);
+    const label = cat ? cat.label : m.category;
+    byCat[label] = (byCat[label] || 0) + 1;
+  }
+  const breakdown = Object.entries(byCat).map(([label, n]) => `${label}: ${n}`).join(' · ');
+  $('modsNotifyTitle').textContent = `Доступно новых модов: ${notifyMods.length}`;
+  $('modsNotifyDesc').textContent = breakdown;
+  $('modsNotify').style.display = 'flex';
 }
 
 function buildCategoryChips() {
@@ -143,6 +164,7 @@ async function loadMods() {
     availableMods = await window.api.fetchMods();
     installedMods = await window.api.scanMods(config.modsPath);
     updateCounts();
+    refreshModsBanner();
     setStatus(`Доступно модов: ${availableMods.length}`);
   } catch (e) {
     setStatus(`Ошибка: ${e.message}`, false);
@@ -154,26 +176,28 @@ async function loadMods() {
 async function scanInstalled() {
   installedMods = await window.api.scanMods(config.modsPath);
   updateCounts();
+  refreshModsBanner();
 }
 
 // Download
-$('downloadBtn').addEventListener('click', async () => {
+window.api.onDownloadProgress((data) => {
+  updateProgress(data.percent, data.file, data.downloaded, data.total);
+  setStatus(`📥 ${data.file} (${data.percent}%)`);
+});
+
+async function downloadMods(list) {
   if (downloadInProgress) return;
-  const toDownload = selectedMods();
+  const toDownload = list;
   if (!toDownload.length) {
-    showToast('Нет модов в выбранных категориях', 'error');
+    showToast('Нет модов для скачивания', 'error');
     return;
   }
 
   downloadInProgress = true;
   $('downloadBtn').disabled = true;
   $('deleteBtn').disabled = true;
+  $('modsNotifyDownload').disabled = true;
   showProgress(true);
-
-  window.api.onDownloadProgress((data) => {
-    updateProgress(data.percent, data.file, data.downloaded, data.total);
-    setStatus(`📥 ${data.file} (${data.percent}%)`);
-  });
 
   try {
     const result = await window.api.downloadAllMods(toDownload, config.modsPath);
@@ -193,7 +217,18 @@ $('downloadBtn').addEventListener('click', async () => {
   showProgress(false);
   $('downloadBtn').disabled = false;
   $('deleteBtn').disabled = false;
+  $('modsNotifyDownload').disabled = false;
   downloadInProgress = false;
+}
+
+$('downloadBtn').addEventListener('click', () => downloadMods(selectedMods()));
+
+$('modsNotifyDownload').addEventListener('click', async () => {
+  await downloadMods(notifyMods);
+});
+
+$('modsNotifyLater').addEventListener('click', () => {
+  $('modsNotify').style.display = 'none';
 });
 
 // Delete

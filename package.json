@@ -1,6 +1,6 @@
 {
   "name": "amurka-launcher",
-  "version": "2.1.9",
+  "version": "2.1.10",
   "description": "AMURKA PVE Mod Launcher for SCUM",
   "main": "main.js",
   "scripts": {
