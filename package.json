@@ -1,6 +1,6 @@
 {
   "name": "amurka-launcher",
-  "version": "2.1.14",
+  "version": "2.1.15",
   "description": "AMURKA PVE Mod Launcher for SCUM",
   "main": "main.js",
   "scripts": {
@@ -21,7 +21,7 @@
       "target": "nsis",
       "icon": "assets/icon.ico",
       "sign": false,
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "publish": {
       "provider": "github",
