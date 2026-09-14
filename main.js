@@ -181,26 +181,28 @@ function httpsGet(url, token) {
   });
 }
 
-function httpsDownload(url, destPath, onProgress) {
+function httpsDownload(url, destPath, onProgress, forceRestart, depth) {
   return new Promise((resolve, reject) => {
+    if (depth > 5) { reject(new Error('Too many redirects')); return; }
     const proto = url.startsWith('https') ? https : http;
 
     let startOffset = 0;
-    try {
-      if (fs.existsSync(destPath)) startOffset = fs.statSync(destPath).size;
-    } catch {}
+    if (forceRestart) {
+      try { fs.unlinkSync(destPath); } catch {}
+    } else {
+      try { if (fs.existsSync(destPath)) startOffset = fs.statSync(destPath).size; } catch {}
+    }
 
     const headers = { 'User-Agent': 'AMURKA-Launcher/2.0' };
     if (startOffset > 0) headers['Range'] = `bytes=${startOffset}-`;
 
     const req = proto.get(url, { headers }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        httpsDownload(res.headers.location, destPath, onProgress).then(resolve).catch(reject);
+        httpsDownload(res.headers.location, destPath, onProgress, false, depth + 1).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode === 416) {
-        if (startOffset > 0) startOffset = 0;
-        httpsDownload(url, destPath, onProgress).then(resolve).catch(reject);
+        httpsDownload(url, destPath, onProgress, true, depth + 1).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode >= 400) {
