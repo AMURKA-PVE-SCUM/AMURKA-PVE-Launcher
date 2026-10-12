@@ -1,0 +1,487 @@
+<Window x:Class="AmurkaLauncher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:AmurkaLauncher.Controls"
+        mc:Ignorable="d"
+        Title="AMURKA PVE Launcher"
+        Height="640" Width="980"
+        MinHeight="540" MinWidth="820"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#0A0A0A"
+        Icon="Resources/icon.ico">
+
+    <Border BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="12">
+        <Grid ClipToBounds="True">
+            <!-- Background Layer -->
+            <Grid.Background>
+                <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.3" RadiusX="0.9" RadiusY="0.9">
+                    <GradientStop Color="#141028" Offset="0"/>
+                    <GradientStop Color="#0A0A0A" Offset="1"/>
+                </RadialGradientBrush>
+            </Grid.Background>
+
+            <!-- Animated Particles -->
+            <controls:ParticleCanvas IsHitTestVisible="False"/>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Custom Title Bar -->
+                <Grid Grid.Row="0" Background="#99000000" MouseLeftButtonDown="TitleBar_MouseDown">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                        <TextBlock Text="AMURKA" FontWeight="Bold" FontSize="13" Foreground="#FFFFFF"/>
+                        <TextBlock Text=" PVE" FontWeight="Bold" FontSize="13" Foreground="{StaticResource AccentBrush}" Margin="2,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <Button Style="{StaticResource TitleBarBtnStyle}" Content="─" Click="MinimizeBtn_Click"/>
+                        <Button Style="{StaticResource TitleBarBtnStyle}" Content="□" Click="MaximizeBtn_Click"/>
+                        <Button Style="{StaticResource TitleBarCloseBtnStyle}" Content="✕" Click="CloseBtn_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Main Layout -->
+                <Grid Grid.Row="1" Margin="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="1*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- LEFT PANEL -->
+                    <Border Grid.Column="0" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="12" Padding="20">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/> <!-- Logo -->
+                                <RowDefinition Height="Auto"/> <!-- Progress -->
+                                <RowDefinition Height="Auto"/> <!-- Status -->
+                                <RowDefinition Height="Auto"/> <!-- Stats -->
+                                <RowDefinition Height="Auto"/> <!-- Action Buttons -->
+                                <RowDefinition Height="*"/>    <!-- Categories -->
+                                <RowDefinition Height="Auto"/> <!-- Mode Select -->
+                                <RowDefinition Height="Auto"/> <!-- Footer -->
+                            </Grid.RowDefinitions>
+
+                            <!-- Logo Section -->
+                            <StackPanel Grid.Row="0">
+                                <TextBlock Text="AMURKA" FontSize="28" FontWeight="Black" Foreground="#FFFFFF"/>
+                                <TextBlock Text="PVE MOD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,6"/>
+                                <Border Background="#14FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="14"
+                                        Padding="10,4" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonUp="ServerInfo_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="SCUM Server | 85.88.179.207:7004" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Text=" 📋" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Progress Section -->
+                            <StackPanel x:Name="ProgressSection" Grid.Row="1" Margin="0,10,0,0" Visibility="Collapsed">
+                                <ProgressBar x:Name="DownloadProgressBar" Style="{StaticResource CustomProgressBarStyle}" Value="0"/>
+                                <TextBlock x:Name="ProgressLabel" Text="Подготовка к скачиванию..." FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <!-- Status Badge -->
+                            <Border x:Name="StatusBadge" Grid.Row="2" Background="{StaticResource AccentDimBrush}"
+                                    BorderBrush="#2500FF88" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,10,0,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0">
+                                        <Ellipse.Effect>
+                                            <DropShadowEffect Color="#00FF88" BlurRadius="8" ShadowDepth="0"/>
+                                        </Ellipse.Effect>
+                                    </Ellipse>
+                                    <TextBlock x:Name="StatusText" Text="Загрузка..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Stats Row -->
+                            <Grid Grid.Row="3" Margin="0,10,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="1"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock x:Name="AvailableCountText" Text="0" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="ДОСТУПНО" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+
+                                <Rectangle Grid.Column="1" Fill="#20FFFFFF" Height="26"/>
+
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock x:Name="InstalledCountText" Text="0" FontSize="22" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="УСТАНОВЛЕНО" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Action Buttons -->
+                            <StackPanel Grid.Row="4" Margin="0,0,0,10">
+                                <!-- Launch Button -->
+                                <Button x:Name="LaunchBtn" Margin="0,0,0,6" Height="42" Cursor="Hand" Click="LaunchBtn_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="b" Background="{StaticResource AccentGradientBrush}" CornerRadius="8">
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="#00FF88" BlurRadius="20" Opacity="0.3" ShadowDepth="0"/>
+                                                </Border.Effect>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="▶  " FontSize="14" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                                    <TextBlock Text="ЗАПУСТИТЬ ИГРУ" FontSize="13" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="b" Property="Opacity" Value="0.9"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <!-- Download Selected -->
+                                <Button x:Name="DownloadBtn" Margin="0,0,0,6" Height="38" Cursor="Hand" Click="DownloadBtn_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="b" Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="⬇  " FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                                    <TextBlock Text="СКАЧАТЬ ВЫБРАННОЕ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="b" Property="Background" Value="#3500FF88"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <!-- Delete All Mods -->
+                                <Button x:Name="DeleteBtn" Height="36" Cursor="Hand" Click="DeleteBtn_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="b" Background="Transparent" BorderBrush="#35FF4757" BorderThickness="1" CornerRadius="8">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="✕  " FontSize="12" FontWeight="Bold" Foreground="{StaticResource DangerBrush}"/>
+                                                    <TextBlock Text="УДАЛИТЬ ВСЕ МОДЫ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource DangerBrush}"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="b" Property="Background" Value="{StaticResource DangerDimBrush}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- Categories Chips -->
+                            <StackPanel Grid.Row="5" Margin="0,0,0,10">
+                                <TextBlock Text="КАТЕГОРИИ МОДОВ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,6"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="100">
+                                    <WrapPanel x:Name="CategoryChipsPanel" Margin="0,0,0,4"/>
+                                </ScrollViewer>
+                            </StackPanel>
+
+                            <!-- Mode Select -->
+                            <StackPanel Grid.Row="6" Margin="0,0,0,10">
+                                <TextBlock Text="РЕЖИМ ЗАПУСКА" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,6"/>
+                                <Border Background="#44000000" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="8" Padding="3">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="ModeDx11Btn" Grid.Column="0" Content="DX11" Click="ModeBtn_Click" Tag="dx11"/>
+                                        <Button x:Name="ModeDx12Btn" Grid.Column="1" Content="DX12" Click="ModeBtn_Click" Tag="dx12"/>
+                                        <Button x:Name="ModeVulkanBtn" Grid.Column="2" Content="Vulkan" Click="ModeBtn_Click" Tag="vulkan"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Footer -->
+                            <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                                <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
+                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.17" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <Ellipse x:Name="UpdateStatusDot" Width="7" Height="7" Fill="#555555" Margin="6,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- RIGHT PANEL -->
+                    <Border Grid.Column="2" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="12" Padding="20">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/> <!-- Title: Installation Paths -->
+                                <RowDefinition Height="Auto"/> <!-- Game Path -->
+                                <RowDefinition Height="Auto"/> <!-- Mods Path -->
+                                <RowDefinition Height="Auto"/> <!-- Title: Links -->
+                                <RowDefinition Height="Auto"/> <!-- Links Grid -->
+                                <RowDefinition Height="*"/>    <!-- Spacer -->
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Text="ПУТИ УСТАНОВКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+
+                            <!-- Game Path Group -->
+                            <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                                <TextBlock Text="Папка игры" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="38"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="GamePathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}" TextChanged="GamePathInput_TextChanged"/>
+                                    <Button x:Name="BrowseGameBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseGameBtn_Click"
+                                            Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                                                    <TextBlock Text="📁" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <Ellipse x:Name="GameStatusDot" Width="6" Height="6" Fill="{StaticResource DangerBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="GameStatusText" Text="SCUM не найден" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Mods Path Group -->
+                            <StackPanel Grid.Row="2" Margin="0,0,0,24">
+                                <TextBlock Text="Папка модов (~mods)" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="38"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="ModsPathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}" TextChanged="ModsPathInput_TextChanged"/>
+                                    <Button x:Name="BrowseModsBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseModsBtn_Click"
+                                            Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                                                    <TextBlock Text="📁" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- Links Section -->
+                            <TextBlock Grid.Row="3" Text="ССЫЛКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+
+                            <Grid Grid.Row="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="8"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Vote -->
+                                <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
+                                        Background="{StaticResource PurpleDimBrush}" BorderBrush="#356C5CE7" Foreground="{StaticResource PurpleBrush}"
+                                        Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/votes">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🗳 " FontSize="14"/>
+                                        <TextBlock Text="Голосование"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Shop -->
+                                <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
+                                        Background="#20FDCB6E" BorderBrush="#35FDCB6E" Foreground="{StaticResource YellowBrush}"
+                                        Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/shop">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🛒 " FontSize="14"/>
+                                        <TextBlock Text="Магазин"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Website -->
+                                <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
+                                        Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" Foreground="{StaticResource AccentBrush}"
+                                        Click="OpenLink_Click" Tag="https://amurka-pve-scum.github.io/">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🌐 " FontSize="14"/>
+                                        <TextBlock Text="Сайт"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Lolka -->
+                                <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
+                                        Background="#205865F2" BorderBrush="#355865F2" Foreground="{StaticResource DiscordBrush}"
+                                        Click="OpenLink_Click" Tag="https://lolka.gg/nmgHA2I">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="💬 " FontSize="14"/>
+                                        <TextBlock Text="Lolka"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- NOTIFICATION BANNER (Top) -->
+            <Border x:Name="ModsNotifyBanner" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,50,0,0"
+                    Background="#F0091C14" BorderBrush="#6000FF88" BorderThickness="1" CornerRadius="12" Padding="14,10"
+                    Visibility="Collapsed" MaxWidth="620">
+                <Border.Effect>
+                    <DropShadowEffect Color="#00FF88" BlurRadius="25" Opacity="0.3" ShadowDepth="4"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="🆕" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock x:Name="ModsNotifyTitle" Text="Доступно новых модов: 0" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                        <TextBlock x:Name="ModsNotifyDesc" Text="" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ModsNotifyDownloadBtn" Margin="0,0,6,0" Padding="14,6" Cursor="Hand" Click="ModsNotifyDownloadBtn_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                        <TextBlock Text="📥 Скачать новые" FontSize="11" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Padding="10,6" Cursor="Hand" Click="ModsNotifyLaterBtn_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                        <TextBlock Text="Позже" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- UPDATE MODAL OVERLAY -->
+            <Grid x:Name="UpdateOverlay" Background="#B0000000" Visibility="Collapsed">
+                <Border Width="380" Background="#F012111E" BorderBrush="#606C5CE7" BorderThickness="1" CornerRadius="16" Padding="32"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#6C5CE7" BlurRadius="40" Opacity="0.4" ShadowDepth="0"/>
+                    </Border.Effect>
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="🔄" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="UpdateTitle" Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="UpdateVersionText" Text="v2.1.18" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
+                        <TextBlock x:Name="UpdateDesc" Text="Нажмите «Скачать», чтобы получить новую версию" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
+
+                        <!-- Update Progress -->
+                        <StackPanel x:Name="UpdateProgressPanel" Margin="0,0,0,16" Visibility="Collapsed">
+                            <ProgressBar x:Name="UpdateProgressBar" Height="6" Background="#20FFFFFF" Value="0">
+                                <ProgressBar.Template>
+                                    <ControlTemplate TargetType="ProgressBar">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                                            <Grid x:Name="PART_Track">
+                                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="3" Background="{StaticResource PurpleGradientBrush}"/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ProgressBar.Template>
+                            </ProgressBar>
+                            <TextBlock x:Name="UpdateProgressLabel" Text="0%" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button x:Name="UpdateDownloadBtn" Padding="20,8" Margin="0,0,8,0" Cursor="Hand" Click="UpdateDownloadBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                            <TextBlock x:Name="btnTxt" Text="📥 Скачать" FontSize="12" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button x:Name="UpdateInstallBtn" Padding="20,8" Margin="0,0,8,0" Cursor="Hand" Visibility="Collapsed" Click="UpdateInstallBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{StaticResource PurpleGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                            <TextBlock Text="🔄 Установить" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button x:Name="UpdateManualBtn" Padding="14,8" Margin="0,0,8,0" Cursor="Hand" Visibility="Collapsed" Click="UpdateManualBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                            <TextBlock Text="🌐 Вручную" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Padding="16,8" Cursor="Hand" Click="UpdateLaterBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                            <TextBlock Text="Позже" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- TOAST NOTIFICATION (Bottom) -->
+            <Border x:Name="ToastBorder" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24"
+                    Background="#E60A0A0A" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8"
+                    Padding="16,8" Visibility="Collapsed" IsHitTestVisible="False">
+                <Border.Effect>
+                    <DropShadowEffect Color="#00FF88" BlurRadius="16" Opacity="0.3" ShadowDepth="0"/>
+                </Border.Effect>
+                <TextBlock x:Name="ToastText" Text="Сообщение" FontSize="12" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
