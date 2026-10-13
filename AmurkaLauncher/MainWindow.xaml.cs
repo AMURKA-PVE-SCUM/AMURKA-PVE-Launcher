@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly GameLauncherService _gameLauncherService = new();
     private readonly DiscordRpcService _discordRpcService = new();
     private readonly UpdateService _updateService = new();
+    private readonly LauncherVerificationService _verificationService = new();
 
     private LauncherConfig _config = new();
     private List<ModCategory> _categories = [];
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _updateCheckTimer = new();
     private readonly DispatcherTimer _toastTimer = new();
+    private readonly DispatcherTimer _verificationTimer = new();
 
     public MainWindow()
     {
@@ -43,6 +45,9 @@ public partial class MainWindow : Window
 
         _updateCheckTimer.Interval = TimeSpan.FromSeconds(60);
         _updateCheckTimer.Tick += async (_, _) => await CheckForUpdatesAsync();
+
+        _verificationTimer.Interval = TimeSpan.FromMinutes(2);
+        _verificationTimer.Tick += async (_, _) => await PingVerificationAsync();
 
         _toastTimer.Interval = TimeSpan.FromSeconds(3.5);
         _toastTimer.Tick += (_, _) =>
@@ -96,11 +101,15 @@ public partial class MainWindow : Window
 
         await CheckForUpdatesAsync();
         _updateCheckTimer.Start();
+
+        _ = PingVerificationAsync();
+        _verificationTimer.Start();
     }
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _updateCheckTimer.Stop();
+        _verificationTimer.Stop();
         _discordRpcService.Dispose();
     }
 
@@ -442,7 +451,22 @@ public partial class MainWindow : Window
         ShowToast($"IP скопирован: {ServerIp}");
     }
 
-    private void LaunchBtn_Click(object sender, RoutedEventArgs e)
+    private async Task PingVerificationAsync()
+    {
+        try
+        {
+            string? steamId = _verificationService.GetActiveSteamId64(_config.GamePath);
+            if (!string.IsNullOrEmpty(steamId))
+            {
+                int installedCount = _installedMods?.Count ?? 0;
+                string currentVer = _updateService.CurrentVersion;
+                await _verificationService.SendVerificationToAllAsync(steamId, currentVer, installedCount, ServerIp);
+            }
+        }
+        catch { }
+    }
+
+    private async void LaunchBtn_Click(object sender, RoutedEventArgs e)
     {
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
         if (exe == null)
@@ -453,6 +477,18 @@ public partial class MainWindow : Window
 
         try
         {
+            SetStatus("🚀 Запуск SCUM...");
+
+            // Фоновый пинг верификации лаунчера на сервер SSM (WebPanel локальный и боевой)
+            try
+            {
+                await Task.WhenAny(
+                    PingVerificationAsync(),
+                    Task.Delay(2500)
+                );
+            }
+            catch { }
+
             _gameLauncherService.LaunchGame(exe, _config.LaunchMode);
             SetStatus($"🚀 Запуск SCUM ({_config.LaunchMode.ToUpper()})...");
             ShowToast("SCUM запущен!");

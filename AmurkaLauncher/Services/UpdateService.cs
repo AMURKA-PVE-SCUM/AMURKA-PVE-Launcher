@@ -9,7 +9,9 @@ namespace AmurkaLauncher.Services;
 
 public class UpdateService
 {
-    private const string GitHubLauncherJsonUrl = "https://raw.githubusercontent.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/main/dist/launcher.json";
+    private const string GitHubApiLatestReleaseUrl = "https://api.github.com/repos/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest";
+    private const string GitHubLatestRedirectUrl = "https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest";
+    private const string GitHubRawLauncherJsonUrl = "https://raw.githubusercontent.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/main/launcher.json";
     private const string GitHubReleasesDownloadBase = "https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/download";
 
     private static readonly HttpClient HttpClient = new()
@@ -33,10 +35,106 @@ public class UpdateService
 
     public async Task<UpdateInfo?> CheckForUpdateAsync()
     {
+        // 1) Способ №1: Официальный GitHub Releases API
         try
         {
-            // 1) Проверка через GitHub
-            using var response = await HttpClient.GetAsync(GitHubLauncherJsonUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiLatestReleaseUrl);
+            using var response = await HttpClient.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                string json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("tag_name", out var tagElem))
+                {
+                    string tagName = tagElem.GetString() ?? "";
+                    string nextVer = Normalize(tagName);
+
+                    if (IsNewerVersion(nextVer, CurrentVersion))
+                    {
+                        string downloadUrl = "";
+                        string fileName = $"AMURKA-PVE-Launcher-Setup-{nextVer}.exe";
+                        long size = 0;
+
+                        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var asset in assets.EnumerateArray())
+                            {
+                                string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    fileName = name;
+                                    downloadUrl = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() ?? "" : "";
+                                    size = asset.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(downloadUrl))
+                        {
+                            downloadUrl = $"{GitHubReleasesDownloadBase}/v{nextVer}/{fileName}";
+                        }
+
+                        return new UpdateInfo
+                        {
+                            Version = nextVer,
+                            File = fileName,
+                            DownloadUrl = downloadUrl,
+                            Size = size
+                        };
+                    }
+                    return null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[UpdateService] GitHub API check failed: {ex.Message}");
+        }
+
+        // 2) Способ №2: Редирект GitHub Releases (без API rate-limit)
+        try
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var redirectClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+            redirectClient.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.0");
+
+            using var resp = await redirectClient.GetAsync(GitHubLatestRedirectUrl);
+            if (resp.StatusCode == System.Net.HttpStatusCode.Redirect || resp.StatusCode == System.Net.HttpStatusCode.MovedPermanently)
+            {
+                var location = resp.Headers.Location;
+                if (location != null)
+                {
+                    string locStr = location.ToString();
+                    var match = System.Text.RegularExpressions.Regex.Match(locStr, @"/tag/(?:v|V)?([0-9.]+)");
+                    if (match.Success)
+                    {
+                        string nextVer = match.Groups[1].Value.Trim();
+                        if (IsNewerVersion(nextVer, CurrentVersion))
+                        {
+                            string fileName = $"AMURKA-PVE-Launcher-Setup-{nextVer}.exe";
+                            return new UpdateInfo
+                            {
+                                Version = nextVer,
+                                File = fileName,
+                                DownloadUrl = $"{GitHubReleasesDownloadBase}/v{nextVer}/{fileName}"
+                            };
+                        }
+                        return null;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[UpdateService] GitHub redirect check failed: {ex.Message}");
+        }
+
+        // 3) Способ №3: Резервный launcher.json из корня репозитория
+        try
+        {
+            using var response = await HttpClient.GetAsync(GitHubRawLauncherJsonUrl);
             if (response.IsSuccessStatusCode)
             {
                 string json = await response.Content.ReadAsStringAsync();
@@ -45,20 +143,24 @@ public class UpdateService
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (info != null && !string.IsNullOrEmpty(info.Version) && !string.IsNullOrEmpty(info.File))
+                if (info != null && !string.IsNullOrEmpty(info.Version))
                 {
                     if (IsNewerVersion(info.Version, CurrentVersion))
                     {
-                        info.DownloadUrl = $"{GitHubReleasesDownloadBase}/v{info.Version}/{info.File}";
+                        if (string.IsNullOrEmpty(info.File))
+                        {
+                            info.File = $"AMURKA-PVE-Launcher-Setup-{Normalize(info.Version)}.exe";
+                        }
+                        info.DownloadUrl = $"{GitHubReleasesDownloadBase}/v{Normalize(info.Version)}/{info.File}";
                         return info;
                     }
                     return null;
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback
+            Debug.WriteLine($"[UpdateService] GitHub raw json check failed: {ex.Message}");
         }
 
         return null;

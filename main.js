@@ -268,6 +268,7 @@ const CATEGORIES = [
   { id: 'skins', label: 'Скины одежды', required: false },
   { id: 'weapons', label: 'Скины на оружие', required: false },
   { id: 'buildings', label: 'Скины на постройки', required: false },
+  { id: 'music', label: 'Музыка', required: false },
 ];
 
 ipcMain.handle('fetch-mods', async () => {
