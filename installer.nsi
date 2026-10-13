@@ -6,7 +6,7 @@ Unicode true
 
 ; General Settings
 Name "AMURKA PVE Launcher"
-OutFile "dist\AMURKA-PVE-Launcher-Setup-2.1.18.exe"
+OutFile "dist\AMURKA-PVE-Launcher-Setup-2.1.19.exe"
 InstallDir "$LOCALAPPDATA\Programs\AMURKA PVE Launcher"
 InstallDirRegKey HKCU "Software\AMURKA PVE Launcher" "InstallLocation"
 RequestExecutionLevel user
@@ -39,19 +39,16 @@ RequestExecutionLevel user
 !insertmacro MUI_LANGUAGE "Russian"
 
 ; Version Information
-VIProductVersion "2.1.18.0"
+VIProductVersion "2.1.19.0"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductName" "AMURKA PVE Launcher"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "CompanyName" "AMURKA PVE"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "LegalCopyright" "DOMO"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileDescription" "AMURKA PVE SCUM Mod Launcher"
-VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileVersion" "2.1.18.0"
-VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductVersion" "2.1.18.0"
+VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileVersion" "2.1.19.0"
+VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductVersion" "2.1.19.0"
 
 Section "MainSection" SecMain
     SetOutPath "$INSTDIR"
-
-    ; Завершаем старый процесс если запущен
-    nsExec::Exec 'taskkill /F /IM "AMURKA PVE Launcher.exe"'
 
     ; Копируем файлы лаунчера
     File "AmurkaLauncher\publish-standalone\AMURKA PVE Launcher.exe"
@@ -73,7 +70,7 @@ Section "MainSection" SecMain
     ; Регистрация в "Установка и удаление программ"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayName" "AMURKA PVE Launcher"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayIcon" "$INSTDIR\AMURKA PVE Launcher.exe,0"
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayVersion" "2.1.18"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayVersion" "2.1.19"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "Publisher" "AMURKA PVE"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "InstallLocation" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -85,17 +82,9 @@ Section "MainSection" SecMain
     ${GetSize} "$INSTDIR" "/S=K" $0 $1 $2
     IntFmt $0 "0x%08X" $0
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "EstimatedSize" "$0"
-
-    ; Если запущен тихий режим автообновления (/S), запускаем обновленный лаунчер
-    ${If} ${Silent}
-        Exec "$INSTDIR\AMURKA PVE Launcher.exe"
-    ${EndIf}
 SectionEnd
 
 Section "Uninstall"
-    ; Закрываем лаунчер если запущен
-    nsExec::Exec 'taskkill /F /IM "AMURKA PVE Launcher.exe"'
-
     ; Удаляем ярлык с Рабочего стола
     Delete "$DESKTOP\AMURKA PVE Launcher.lnk"
 

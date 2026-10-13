@@ -168,8 +168,13 @@ public class UpdateService
 
     public async Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int> onProgress, CancellationToken ct = default)
     {
-        string tempFolder = Path.GetTempPath();
-        string destPath = Path.Combine(tempFolder, updateInfo.File);
+        string updatesFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "amurka-launcher",
+            "updates"
+        );
+        Directory.CreateDirectory(updatesFolder);
+        string destPath = Path.Combine(updatesFolder, updateInfo.File);
 
         using var response = await HttpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
@@ -200,10 +205,10 @@ public class UpdateService
     {
         if (File.Exists(installerPath))
         {
+            // Запускаем инсталлятор в обычном видимом режиме (без подозрительного скрытого флага /S)
             Process.Start(new ProcessStartInfo
             {
                 FileName = installerPath,
-                Arguments = "/S",
                 UseShellExecute = true
             });
         }
