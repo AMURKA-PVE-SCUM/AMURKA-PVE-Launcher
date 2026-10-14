@@ -1,4 +1,28 @@
-node_modules/
-dist/
-.DS_Store
+# ==========================================
+# .NET / C# Build Artifacts
+# ==========================================
+[Bb]in/
+[Oo]bj/
+[Pp]ublish/
+[Pp]ublish-standalone/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Visual Studio & IDEs
+.vs/
+.vscode/
+.idea/
+
+# Distribution & Installer outputs (keep updater manifest dist/launcher.json)
+dist/*.exe
+dist/win-unpacked/
+dist/*.yml
+
+# Logs and temporary files
 *.log
+*.tmp
+.DS_Store
+Thumbs.db

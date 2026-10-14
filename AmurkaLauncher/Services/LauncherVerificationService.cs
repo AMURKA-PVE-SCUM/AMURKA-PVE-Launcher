@@ -174,7 +174,7 @@ public class LauncherVerificationService
         var payload = new
         {
             steamId = steamId.Trim(),
-            version = string.IsNullOrWhiteSpace(version) ? "2.1.17" : version.Trim(),
+            version = string.IsNullOrWhiteSpace(version) ? "2.1.20" : version.Trim(),
             installedCount = installedModsCount,
             timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
