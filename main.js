@@ -274,30 +274,33 @@ const CATEGORIES = [
 ipcMain.handle('fetch-mods', async () => {
   const mods = [];
 
-  for (const cat of CATEGORIES) {
-    const url = `${YANDEX_API}?public_key=${encodeURIComponent(YANDEX_PUBLIC_LINK)}&path=${encodeURIComponent('/' + cat.id)}&limit=100`;
-    let items = [];
-    try {
-      const raw = await httpsGet(url);
-      const data = parseJson(raw);
-      items = (data._embedded && data._embedded.items) || [];
-    } catch (e) {
-      items = [];
-    }
-    for (const item of items) {
-      if (item.type === 'file' && item.name.toLowerCase().endsWith('.pak')) {
-        mods.push({
-          name: item.name,
-          downloadUrl: item.file,
-          size: item.size,
-          category: cat.id,
-        });
+  try {
+    const raw = await httpsGet('https://api.github.com/repos/AMURKA-PVE-SCUM/amurka-pve-mods/git/trees/main?recursive=1');
+    const data = parseJson(raw);
+    const tree = data.tree || [];
+
+    for (const item of tree) {
+      if (item.type === 'blob' && (item.path.toLowerCase().endsWith('.pak') || item.path.toLowerCase().endsWith('.sig'))) {
+        const parts = item.path.split('/');
+        if (parts.length === 2) {
+          const category = parts[0];
+          const fileName = parts[1];
+          const downloadUrl = `https://raw.githubusercontent.com/AMURKA-PVE-SCUM/amurka-pve-mods/main/${encodeURIComponent(category)}/${encodeURIComponent(fileName)}`;
+          mods.push({
+            name: fileName,
+            downloadUrl,
+            size: item.size || 0,
+            category,
+          });
+        }
       }
     }
+  } catch (e) {
+    console.error('GitHub fetch error:', e.message);
   }
 
   if (!mods.length) {
-    throw new Error('Не удалось получить список модов с Яндекс Диска');
+    throw new Error('Не удалось получить список модов с GitHub');
   }
 
   return mods;
