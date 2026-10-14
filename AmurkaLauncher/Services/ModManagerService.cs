@@ -61,7 +61,10 @@ public class ModManagerService
                         string type = item.TryGetProperty("type", out var tProp) ? tProp.GetString() ?? "" : "";
                         long size = item.TryGetProperty("size", out var sProp) ? sProp.GetInt64() : 0;
 
-                        if (type == "blob" && path.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
+                        bool isModFile = path.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
+                                         path.EndsWith(".sig", StringComparison.OrdinalIgnoreCase);
+
+                        if (type == "blob" && isModFile)
                         {
                             var parts = path.Split('/', 2);
                             if (parts.Length == 2 && categorySet.Contains(parts[0]))
@@ -112,7 +115,10 @@ public class ModManagerService
                             string downloadUrl = item.TryGetProperty("download_url", out var d) ? d.GetString() ?? "" : "";
                             long size = item.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
 
-                            if (type == "file" && name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
+                            bool isModFile = name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
+                                             name.EndsWith(".sig", StringComparison.OrdinalIgnoreCase);
+
+                            if (type == "file" && isModFile)
                             {
                                 if (string.IsNullOrEmpty(downloadUrl))
                                 {
@@ -155,7 +161,8 @@ public class ModManagerService
 
         try
         {
-            return Directory.EnumerateFiles(modsPath, "*.pak", SearchOption.TopDirectoryOnly)
+            return Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => f.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .Where(name => !string.IsNullOrEmpty(name))
                 .Select(name => name!)
@@ -319,8 +326,9 @@ public class ModManagerService
         }
 
         int removed = 0;
-        var pakFiles = Directory.GetFiles(modsPath, "*.pak", SearchOption.TopDirectoryOnly);
-        foreach (var file in pakFiles)
+        var modFiles = Directory.GetFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
+            .Where(f => f.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".sig", StringComparison.OrdinalIgnoreCase));
+        foreach (var file in modFiles)
         {
             try
             {
