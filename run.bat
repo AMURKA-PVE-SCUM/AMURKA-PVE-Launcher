@@ -8,8 +8,8 @@ echo   Created by DOMO
 echo ===================================================
 echo.
 
-set "EXE_PATH=AmurkaLauncher\bin\Release\net8.0-windows\AMURKA PVE Launcher.exe"
-set "DEBUG_EXE_PATH=AmurkaLauncher\bin\Debug\net8.0-windows\AMURKA PVE Launcher.exe"
+set "EXE_PATH=AmurkaLauncher\bin\Release\net10.0-windows\AMURKA PVE Launcher.exe"
+set "DEBUG_EXE_PATH=AmurkaLauncher\bin\Debug\net10.0-windows\AMURKA PVE Launcher.exe"
 
 if exist "%EXE_PATH%" (
     echo Запуск лаунчера (Release)...

@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -12,15 +14,24 @@ public class ModManagerService
     private const string GitHubRepoName = "amurka-pve-mods";
     private const string GitHubBranch = "main";
     private const int DownloadConcurrency = 4;
+    private const int BufferSize = 81920;
 
-    private static readonly HttpClient HttpClient = new()
-    {
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+    private static readonly HttpClient HttpClient = CreateHttpClient();
 
-    static ModManagerService()
+    private static HttpClient CreateHttpClient()
     {
-        HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.0");
+        var handler = new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+        };
+
+        var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromMinutes(5)
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.0");
+        return client;
     }
 
     public List<ModCategory> GetDefaultCategories()
@@ -46,19 +57,19 @@ public class ModManagerService
         {
             string treeUrl = $"https://api.github.com/repos/{GitHubRepoOwner}/{GitHubRepoName}/git/trees/{GitHubBranch}?recursive=1";
             using var req = new HttpRequestMessage(HttpMethod.Get, treeUrl);
-            using var response = await HttpClient.SendAsync(req);
+            using var response = await HttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
 
             if (response.IsSuccessStatusCode)
             {
-                using var stream = await response.Content.ReadAsStreamAsync();
+                await using var stream = await response.Content.ReadAsStreamAsync();
                 using var doc = await JsonDocument.ParseAsync(stream);
 
                 if (doc.RootElement.TryGetProperty("tree", out var tree) && tree.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var item in tree.EnumerateArray())
                     {
-                        string path = item.TryGetProperty("path", out var pProp) ? pProp.GetString() ?? "" : "";
-                        string type = item.TryGetProperty("type", out var tProp) ? tProp.GetString() ?? "" : "";
+                        string path = item.TryGetProperty("path", out var pProp) ? pProp.GetString() ?? string.Empty : string.Empty;
+                        string type = item.TryGetProperty("type", out var tProp) ? tProp.GetString() ?? string.Empty : string.Empty;
                         long size = item.TryGetProperty("size", out var sProp) ? sProp.GetInt64() : 0;
 
                         bool isModFile = path.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
@@ -100,19 +111,19 @@ public class ModManagerService
                 try
                 {
                     string url = $"https://api.github.com/repos/{GitHubRepoOwner}/{GitHubRepoName}/contents/{cat.Id}";
-                    using var response = await HttpClient.GetAsync(url);
+                    using var response = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     if (!response.IsSuccessStatusCode) continue;
 
-                    using var stream = await response.Content.ReadAsStreamAsync();
+                    await using var stream = await response.Content.ReadAsStreamAsync();
                     using var doc = await JsonDocument.ParseAsync(stream);
 
                     if (doc.RootElement.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var item in doc.RootElement.EnumerateArray())
                         {
-                            string type = item.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-                            string name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                            string downloadUrl = item.TryGetProperty("download_url", out var d) ? d.GetString() ?? "" : "";
+                            string type = item.TryGetProperty("type", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+                            string name = item.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+                            string downloadUrl = item.TryGetProperty("download_url", out var d) ? d.GetString() ?? string.Empty : string.Empty;
                             long size = item.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
 
                             bool isModFile = name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
@@ -146,7 +157,7 @@ public class ModManagerService
 
         if (result.Count == 0)
         {
-            throw new Exception("Не удалось получить список модов с GitHub");
+            throw new InvalidOperationException("Не удалось получить список модов с GitHub");
         }
 
         return result;
@@ -161,12 +172,20 @@ public class ModManagerService
 
         try
         {
-            return Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
-                .Where(f => f.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
-                .Select(Path.GetFileName)
-                .Where(name => !string.IsNullOrEmpty(name))
-                .Select(name => name!)
-                .ToList();
+            var list = new List<string>();
+            foreach (var file in Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly))
+            {
+                if (file.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
+                    file.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
+                {
+                    string? name = Path.GetFileName(file);
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        list.Add(name);
+                    }
+                }
+            }
+            return list;
         }
         catch
         {
@@ -192,11 +211,17 @@ public class ModManagerService
             throw new InvalidOperationException($"Установка разрешена только в папку ~mods! Текущая папка: {modsPath}");
         }
 
-        // Гарантируем создание целевой папки
         Directory.CreateDirectory(modsPath);
 
-        // Определяем очередь модов, которых еще нет
-        var queue = mods.Where(m => !File.Exists(Path.Combine(modsPath, m.Name))).ToList();
+        // Определяем очередь модов: отсутствующие или недокачанные файлы
+        var queue = mods.Where(m =>
+        {
+            string dest = Path.Combine(modsPath, m.Name);
+            if (!File.Exists(dest)) return true;
+            if (m.Size > 0 && new FileInfo(dest).Length != m.Size) return true;
+            return false;
+        }).ToList();
+
         long totalBytes = queue.Sum(m => m.Size);
         int success = mods.Count - queue.Count;
         int errors = 0;
@@ -207,19 +232,37 @@ public class ModManagerService
             return (success, errors);
         }
 
-        var fileBytes = new Dictionary<string, long>();
-        object syncLock = new();
+        // Учитываем уже имеющиеся байты частично скачанных файлов для плавного прогресса
+        long initialDownloadedBytes = 0;
+        foreach (var m in queue)
+        {
+            string dest = Path.Combine(modsPath, m.Name);
+            if (File.Exists(dest))
+            {
+                try
+                {
+                    long len = new FileInfo(dest).Length;
+                    if (m.Size <= 0 || len < m.Size)
+                    {
+                        initialDownloadedBytes += len;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        long totalDownloadedBytes = initialDownloadedBytes;
+        int lastReportedPercent = -1;
 
         void ReportProgress(string currentFile)
         {
-            long currentTotalBytes;
-            lock (syncLock)
+            long currentTotal = Interlocked.Read(ref totalDownloadedBytes);
+            int percent = totalBytes > 0 ? (int)Math.Min(100, Math.Round((double)currentTotal / totalBytes * 100)) : 0;
+            if (percent != lastReportedPercent)
             {
-                currentTotalBytes = fileBytes.Values.Sum();
+                lastReportedPercent = percent;
+                onProgress(percent, currentFile, currentTotal, totalBytes);
             }
-
-            int percent = totalBytes > 0 ? (int)Math.Min(100, Math.Round((double)currentTotalBytes / totalBytes * 100)) : 0;
-            onProgress(percent, currentFile, currentTotalBytes, totalBytes);
         }
 
         using var semaphore = new SemaphoreSlim(DownloadConcurrency, DownloadConcurrency);
@@ -229,30 +272,18 @@ public class ModManagerService
             try
             {
                 string dest = Path.Combine(modsPath, mod.Name);
-                if (File.Exists(dest))
+                if (File.Exists(dest) && (mod.Size <= 0 || new FileInfo(dest).Length == mod.Size))
                 {
                     Interlocked.Increment(ref success);
                     return;
                 }
 
-                lock (syncLock)
+                await DownloadSingleFileAsync(mod.DownloadUrl, dest, mod.Size, bytesDelta =>
                 {
-                    fileBytes[mod.Name] = 0;
-                }
-
-                await DownloadSingleFileAsync(mod.DownloadUrl, dest, bytes =>
-                {
-                    lock (syncLock)
-                    {
-                        fileBytes[mod.Name] = bytes;
-                    }
+                    Interlocked.Add(ref totalDownloadedBytes, bytesDelta);
                     ReportProgress(mod.Name);
                 }, ct);
 
-                lock (syncLock)
-                {
-                    fileBytes[mod.Name] = mod.Size;
-                }
                 ReportProgress(mod.Name);
                 Interlocked.Increment(ref success);
             }
@@ -275,13 +306,23 @@ public class ModManagerService
     private static async Task DownloadSingleFileAsync(
         string url,
         string destPath,
-        Action<long> onFileProgress,
+        long expectedSize,
+        Action<int> onBytesRead,
         CancellationToken ct)
     {
         long existingLength = 0;
         if (File.Exists(destPath))
         {
-            try { existingLength = new FileInfo(destPath).Length; } catch { }
+            try
+            {
+                existingLength = new FileInfo(destPath).Length;
+                if (expectedSize > 0 && existingLength > expectedSize)
+                {
+                    File.Delete(destPath);
+                    existingLength = 0;
+                }
+            }
+            catch { }
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -293,28 +334,32 @@ public class ModManagerService
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
         // Если Range не поддерживается или вернулась ошибка 416, качаем заново
-        if (response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
             File.Delete(destPath);
-            await DownloadSingleFileAsync(url, destPath, onFileProgress, ct);
+            await DownloadSingleFileAsync(url, destPath, expectedSize, onBytesRead, ct);
             return;
         }
 
         response.EnsureSuccessStatusCode();
 
-        bool isAppend = response.StatusCode == System.Net.HttpStatusCode.PartialContent && existingLength > 0;
+        bool isAppend = response.StatusCode == HttpStatusCode.PartialContent && existingLength > 0;
         await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-        await using var fileStream = new FileStream(destPath, isAppend ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        await using var fileStream = new FileStream(destPath, isAppend ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
 
-        byte[] buffer = new byte[81920];
-        int bytesRead;
-        long totalDownloaded = isAppend ? existingLength : 0;
-
-        while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+        try
         {
-            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
-            totalDownloaded += bytesRead;
-            onFileProgress(totalDownloaded);
+            int bytesRead;
+            while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, BufferSize), ct)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
+                onBytesRead(bytesRead);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -333,18 +378,20 @@ public class ModManagerService
         }
 
         int removed = 0;
-        var modFiles = Directory.GetFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(f => f.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".sig", StringComparison.OrdinalIgnoreCase));
-        foreach (var file in modFiles)
+        foreach (var file in Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly))
         {
-            try
+            if (file.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
+                file.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
             {
-                File.Delete(file);
-                removed++;
-            }
-            catch
-            {
-                // Ignore if in use
+                try
+                {
+                    File.Delete(file);
+                    removed++;
+                }
+                catch
+                {
+                    // Ignore if in use
+                }
             }
         }
 

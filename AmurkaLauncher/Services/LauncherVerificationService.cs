@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using System.Text;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace AmurkaLauncher.Services;
 
-public class LauncherVerificationService
+public partial class LauncherVerificationService
 {
     private static readonly string[] DefaultEndpoints =
     [
@@ -18,8 +18,13 @@ public class LauncherVerificationService
     ];
 
     private const ulong Steam64Base = 76561197960265728UL;
+    private const long MaxLogFileSizeBytes = 1024 * 1024; // 1 MB limit to prevent disk leak
 
-    private static readonly HttpClient HttpClient = new()
+    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+    })
     {
         Timeout = TimeSpan.FromSeconds(5)
     };
@@ -30,6 +35,21 @@ public class LauncherVerificationService
         "verification.log"
     );
 
+    [GeneratedRegex(@"""(7656119\d{10})""\s*\{([^}]+)\}", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static partial Regex SteamUserBlockRegex();
+
+    [GeneratedRegex(@"""MostRecent""\s+""1""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MostRecentRegex();
+
+    [GeneratedRegex(@"""AutoLogin""\s+""1""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex AutoLoginRegex();
+
+    [GeneratedRegex(@"""Timestamp""\s+""(\d+)""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex TimestampRegex();
+
+    [GeneratedRegex(@"""(7656119\d{10})""", RegexOptions.CultureInvariant)]
+    private static partial Regex FallbackSteamIdRegex();
+
     private void Log(string message)
     {
         try
@@ -39,6 +59,16 @@ public class LauncherVerificationService
             {
                 Directory.CreateDirectory(dir);
             }
+
+            // Ротация лога для защиты от бесконечной утечки дискового пространства
+            var fileInfo = new FileInfo(LogFilePath);
+            if (fileInfo.Exists && fileInfo.Length > MaxLogFileSizeBytes)
+            {
+                string oldLog = LogFilePath + ".old";
+                File.Delete(oldLog);
+                File.Move(LogFilePath, oldLog);
+            }
+
             string entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}";
             File.AppendAllText(LogFilePath, entry);
             Debug.WriteLine($"[LauncherVerify] {message}");
@@ -85,7 +115,7 @@ public class LauncherVerificationService
                 {
                     string content = File.ReadAllText(vdfPath);
 
-                    var blockMatches = Regex.Matches(content, @"""(7656119\d{10})""\s*\{([^}]+)\}", RegexOptions.Singleline);
+                    var blockMatches = SteamUserBlockRegex().Matches(content);
                     string? bestSteamId = null;
                     long highestTimestamp = -1;
 
@@ -95,15 +125,14 @@ public class LauncherVerificationService
                         string blockBody = m.Groups[2].Value;
 
                         // Явный признак активного пользователя
-                        if (Regex.IsMatch(blockBody, @"""MostRecent""\s+""1""", RegexOptions.IgnoreCase) ||
-                            Regex.IsMatch(blockBody, @"""AutoLogin""\s+""1""", RegexOptions.IgnoreCase))
+                        if (MostRecentRegex().IsMatch(blockBody) || AutoLoginRegex().IsMatch(blockBody))
                         {
                             Log($"SteamID detected from loginusers.vdf (MostRecent/AutoLogin): {steamId}");
                             return steamId;
                         }
 
                         // Сравнение по Timestamp активности
-                        var tsMatch = Regex.Match(blockBody, @"""Timestamp""\s+""(\d+)""", RegexOptions.IgnoreCase);
+                        var tsMatch = TimestampRegex().Match(blockBody);
                         if (tsMatch.Success && long.TryParse(tsMatch.Groups[1].Value, out long ts))
                         {
                             if (ts > highestTimestamp)
@@ -125,7 +154,7 @@ public class LauncherVerificationService
                     }
 
                     // Если структура нестандартная, берем первый валидный SteamID64
-                    var firstMatch = Regex.Match(content, @"""(7656119\d{10})""");
+                    var firstMatch = FallbackSteamIdRegex().Match(content);
                     if (firstMatch.Success)
                     {
                         string steamId = firstMatch.Groups[1].Value;
@@ -174,12 +203,12 @@ public class LauncherVerificationService
         var payload = new
         {
             steamId = steamId.Trim(),
-            version = string.IsNullOrWhiteSpace(version) ? "2.1.20" : version.Trim(),
+            version = string.IsNullOrWhiteSpace(version) ? "2.1.21" : version.Trim(),
             installedCount = installedModsCount,
             timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
 
-        string json = JsonSerializer.Serialize(payload);
+        byte[] jsonUtf8Bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
         Log($"Sending verification for SteamID {steamId} (v{payload.version}, {installedModsCount} mods) to {targets.Count} endpoints...");
 
         bool anySuccess = false;
@@ -187,7 +216,9 @@ public class LauncherVerificationService
         {
             try
             {
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = new ByteArrayContent(jsonUtf8Bytes);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+
                 using var response = await HttpClient.PostAsync(url, content);
                 string respBody = await response.Content.ReadAsStringAsync();
                 if (response.IsSuccessStatusCode)
@@ -222,7 +253,7 @@ public class LauncherVerificationService
                 int idx = norm.IndexOf(@"\steamapps\", StringComparison.OrdinalIgnoreCase);
                 if (idx > 0)
                 {
-                    string libRoot = norm.Substring(0, idx);
+                    string libRoot = norm[..idx];
                     string vdf = Path.Combine(libRoot, "config", "loginusers.vdf");
                     if (File.Exists(vdf)) return libRoot;
                 }

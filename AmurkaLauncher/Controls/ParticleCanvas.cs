@@ -3,46 +3,99 @@ using System.Windows.Media;
 
 namespace AmurkaLauncher.Controls;
 
-public class ParticleCanvas : FrameworkElement
+public sealed class ParticleCanvas : FrameworkElement
 {
-    private class Particle
+    private struct Particle
     {
-        public double X { get; set; }
-        public double Y { get; set; }
-        public double Size { get; set; }
-        public double SpeedX { get; set; }
-        public double SpeedY { get; set; }
-        public double Opacity { get; set; }
+        public double X;
+        public double Y;
+        public double Size;
+        public double SpeedX;
+        public double SpeedY;
+        public double Opacity;
     }
 
-    private readonly List<Particle> _particles = new();
+    private const int ParticleCount = 80;
+    private readonly Particle[] _particles = new Particle[ParticleCount];
     private readonly Random _rand = new();
     private bool _isInitialized;
+    private bool _isHooked;
+
+    // Кэш замороженных кистей для всех 256 уровней альфа-канала цвета #00FF88.
+    // Полностью устраняет тысячи GC-аллокаций кистей в секунду при рендеринге (60-144 FPS).
+    private static readonly SolidColorBrush[] CachedBrushes = CreateBrushCache();
+
+    private static SolidColorBrush[] CreateBrushCache()
+    {
+        var brushes = new SolidColorBrush[256];
+        for (int i = 0; i < 256; i++)
+        {
+            var brush = new SolidColorBrush(Color.FromArgb((byte)i, 0, 255, 136));
+            brush.Freeze();
+            brushes[i] = brush;
+        }
+        return brushes;
+    }
 
     public ParticleCanvas()
     {
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        CompositionTarget.Rendering += OnRendering;
+        UpdateRenderingSubscription();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        CompositionTarget.Rendering -= OnRendering;
+        UnhookRendering();
+    }
+
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        UpdateRenderingSubscription();
+    }
+
+    private void UpdateRenderingSubscription()
+    {
+        if (IsLoaded && IsVisible)
+        {
+            HookRendering();
+        }
+        else
+        {
+            UnhookRendering();
+        }
+    }
+
+    private void HookRendering()
+    {
+        if (!_isHooked)
+        {
+            CompositionTarget.Rendering += OnRendering;
+            _isHooked = true;
+        }
+    }
+
+    private void UnhookRendering()
+    {
+        if (_isHooked)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            _isHooked = false;
+        }
     }
 
     private void InitParticles(double width, double height)
     {
-        _particles.Clear();
-        for (int i = 0; i < 80; i++)
+        for (int i = 0; i < ParticleCount; i++)
         {
             var p = CreateParticle(width, height);
             p.Y = _rand.NextDouble() * height;
-            _particles.Add(p);
+            _particles[i] = p;
         }
         _isInitialized = true;
     }
@@ -63,18 +116,21 @@ public class ParticleCanvas : FrameworkElement
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        if (!IsVisible) return;
+
         double w = ActualWidth;
         double h = ActualHeight;
 
         if (w <= 0 || h <= 0) return;
 
-        if (!_isInitialized || _particles.Count == 0)
+        if (!_isInitialized)
         {
             InitParticles(w, h);
         }
 
-        foreach (var p in _particles)
+        for (int i = 0; i < _particles.Length; i++)
         {
+            ref var p = ref _particles[i];
             p.X += p.SpeedX;
             p.Y += p.SpeedY;
 
@@ -100,19 +156,21 @@ public class ParticleCanvas : FrameworkElement
     {
         base.OnRender(dc);
 
-        foreach (var p in _particles)
+        if (!IsVisible) return;
+
+        for (int i = 0; i < _particles.Length; i++)
         {
-            byte alpha = (byte)Math.Clamp(p.Opacity * 0.6 * 255, 0, 255);
-            var brush = new SolidColorBrush(Color.FromArgb(alpha, 0, 255, 136));
-            brush.Freeze();
+            ref readonly var p = ref _particles[i];
+
+            int alpha = Math.Clamp((int)(p.Opacity * 0.6 * 255.0), 0, 255);
+            var brush = CachedBrushes[alpha];
 
             dc.DrawEllipse(brush, null, new Point(p.X, p.Y), p.Size, p.Size);
 
             if (p.Size > 1.5)
             {
-                byte glowAlpha = (byte)Math.Clamp(p.Opacity * 0.08 * 255, 0, 255);
-                var glowBrush = new SolidColorBrush(Color.FromArgb(glowAlpha, 0, 255, 136));
-                glowBrush.Freeze();
+                int glowAlpha = Math.Clamp((int)(p.Opacity * 0.08 * 255.0), 0, 255);
+                var glowBrush = CachedBrushes[glowAlpha];
                 dc.DrawEllipse(glowBrush, null, new Point(p.X, p.Y), p.Size * 2, p.Size * 2);
             }
         }

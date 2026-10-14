@@ -5,22 +5,18 @@ namespace AmurkaLauncher.Models;
 
 public class ModCategory : INotifyPropertyChanged
 {
-    private bool _isSelected;
-    private int _totalCount;
-    private int _installedCount;
-
     public string Id { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
     public bool Required { get; set; }
 
     public bool IsSelected
     {
-        get => _isSelected;
+        get;
         set
         {
-            if (_isSelected != value)
+            if (field != value)
             {
-                _isSelected = value;
+                field = value;
                 OnPropertyChanged();
             }
         }
@@ -28,12 +24,12 @@ public class ModCategory : INotifyPropertyChanged
 
     public int TotalCount
     {
-        get => _totalCount;
+        get;
         set
         {
-            if (_totalCount != value)
+            if (field != value)
             {
-                _totalCount = value;
+                field = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CountDisplay));
             }
@@ -42,12 +38,12 @@ public class ModCategory : INotifyPropertyChanged
 
     public int InstalledCount
     {
-        get => _installedCount;
+        get;
         set
         {
-            if (_installedCount != value)
+            if (field != value)
             {
-                _installedCount = value;
+                field = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CountDisplay));
             }

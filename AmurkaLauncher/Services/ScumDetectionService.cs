@@ -4,8 +4,14 @@ using Microsoft.Win32;
 
 namespace AmurkaLauncher.Services;
 
-public class ScumDetectionService
+public partial class ScumDetectionService
 {
+    [GeneratedRegex(@"""path""\s+""([^""]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex LibraryPathRegex();
+
+    [GeneratedRegex(@"""installdir""\s+""([^""]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex InstallDirRegex();
+
     public string? AutoDetectScum()
     {
         var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -68,7 +74,7 @@ public class ScumDetectionService
                 try
                 {
                     string content = File.ReadAllText(vdf);
-                    var matches = Regex.Matches(content, @"""path""\s+""([^""]+)""");
+                    var matches = LibraryPathRegex().Matches(content);
                     foreach (Match m in matches)
                     {
                         if (m.Groups.Count > 1)
@@ -97,7 +103,7 @@ public class ScumDetectionService
                 try
                 {
                     string content = File.ReadAllText(manifest);
-                    var match = Regex.Match(content, @"""installdir""\s+""([^""]+)""");
+                    var match = InstallDirRegex().Match(content);
                     if (match.Success && match.Groups.Count > 1)
                     {
                         string installDir = match.Groups[1].Value;

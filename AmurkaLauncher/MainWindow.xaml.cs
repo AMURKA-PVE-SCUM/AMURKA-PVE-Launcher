@@ -15,6 +15,21 @@ public partial class MainWindow : Window
 {
     private const string ServerIp = "85.88.179.207:7004";
 
+    // Статичные замороженные кисти для исключения аллокаций и утечек памяти UI
+    private static readonly SolidColorBrush ChipSelectedBorder = CreateFrozenBrush(Color.FromArgb(80, 0, 255, 136));
+    private static readonly SolidColorBrush ChipSelectedBadge = CreateFrozenBrush(Color.FromArgb(40, 0, 255, 136));
+    private static readonly SolidColorBrush ChipUnselectedBg = CreateFrozenBrush(Color.FromArgb(60, 0, 0, 0));
+    private static readonly SolidColorBrush ChipUnselectedBadge = CreateFrozenBrush(Color.FromArgb(20, 255, 255, 255));
+    private static readonly SolidColorBrush ModeActiveForeground = CreateFrozenBrush(Color.FromRgb(10, 10, 10));
+    private static readonly SolidColorBrush UpdateDotInactive = CreateFrozenBrush(Color.FromRgb(85, 85, 85));
+
+    private static SolidColorBrush CreateFrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     private readonly ConfigService _configService = new();
     private readonly ScumDetectionService _scumDetectionService = new();
     private readonly ModManagerService _modManagerService = new();
@@ -44,10 +59,10 @@ public partial class MainWindow : Window
         Closing += MainWindow_Closing;
 
         _updateCheckTimer.Interval = TimeSpan.FromSeconds(60);
-        _updateCheckTimer.Tick += async (_, _) => await CheckForUpdatesAsync();
+        _updateCheckTimer.Tick += OnUpdateCheckTimerTick;
 
         _verificationTimer.Interval = TimeSpan.FromMinutes(2);
-        _verificationTimer.Tick += async (_, _) => await PingVerificationAsync();
+        _verificationTimer.Tick += OnVerificationTimerTick;
 
         _toastTimer.Interval = TimeSpan.FromSeconds(3.5);
         _toastTimer.Tick += (_, _) =>
@@ -55,6 +70,30 @@ public partial class MainWindow : Window
             _toastTimer.Stop();
             ToastBorder.Visibility = Visibility.Collapsed;
         };
+    }
+
+    private async void OnUpdateCheckTimerTick(object? sender, EventArgs e)
+    {
+        try
+        {
+            await CheckForUpdatesAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[UpdateTimer] Error: {ex.Message}");
+        }
+    }
+
+    private async void OnVerificationTimerTick(object? sender, EventArgs e)
+    {
+        try
+        {
+            await PingVerificationAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[VerificationTimer] Error: {ex.Message}");
+        }
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -110,6 +149,7 @@ public partial class MainWindow : Window
     {
         _updateCheckTimer.Stop();
         _verificationTimer.Stop();
+        _toastTimer.Stop();
         _discordRpcService.Dispose();
     }
 
@@ -144,7 +184,7 @@ public partial class MainWindow : Window
     private void ApplyModeBtnStyle(Button btn, bool isActive)
     {
         btn.Background = isActive ? (Brush)FindResource("AccentBrush") : Brushes.Transparent;
-        btn.Foreground = isActive ? new SolidColorBrush(Color.FromRgb(10, 10, 10)) : (Brush)FindResource("TextSecondaryBrush");
+        btn.Foreground = isActive ? ModeActiveForeground : (Brush)FindResource("TextSecondaryBrush");
         btn.FontWeight = FontWeights.Bold;
         btn.FontSize = 11;
         btn.BorderThickness = new Thickness(0);
@@ -218,17 +258,17 @@ public partial class MainWindow : Window
         if (cat.IsSelected)
         {
             border.Background = (Brush)FindResource("AccentDimBrush");
-            border.BorderBrush = new SolidColorBrush(Color.FromArgb(80, 0, 255, 136));
+            border.BorderBrush = ChipSelectedBorder;
             labelText.Foreground = (Brush)FindResource("AccentBrush");
-            countBadge.Background = new SolidColorBrush(Color.FromArgb(40, 0, 255, 136));
+            countBadge.Background = ChipSelectedBadge;
             countText.Foreground = (Brush)FindResource("AccentBrush");
         }
         else
         {
-            border.Background = new SolidColorBrush(Color.FromArgb(60, 0, 0, 0));
+            border.Background = ChipUnselectedBg;
             border.BorderBrush = (Brush)FindResource("CardBorderBrush");
             labelText.Foreground = (Brush)FindResource("TextSecondaryBrush");
-            countBadge.Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+            countBadge.Background = ChipUnselectedBadge;
             countText.Foreground = (Brush)FindResource("TextTertiaryBrush");
         }
         countText.Text = cat.CountDisplay;
@@ -259,7 +299,7 @@ public partial class MainWindow : Window
         SetStatus("Загрузка списка модов...");
         ProgressSection.Visibility = Visibility.Visible;
         DownloadProgressBar.Value = 0;
-        ProgressLabel.Text = "Подключение к Яндекс Диску...";
+        ProgressLabel.Text = "Подключение к репозиторию модов...";
 
         try
         {
@@ -372,7 +412,7 @@ public partial class MainWindow : Window
                 _config.ModsPath,
                 (percent, file, downloaded, total) =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.BeginInvoke(() =>
                     {
                         DownloadProgressBar.Value = percent;
                         string sizeStr = total > 0 ? $"{FormatSize(downloaded)} / {FormatSize(total)}" : $"{percent}%";
@@ -667,7 +707,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                UpdateStatusDot.Fill = new SolidColorBrush(Color.FromRgb(85, 85, 85));
+                UpdateStatusDot.Fill = UpdateDotInactive;
                 UpdateStatusDot.ToolTip = "Обновления: актуально";
             }
         }
@@ -689,7 +729,7 @@ public partial class MainWindow : Window
         {
             _downloadedInstallerPath = await _updateService.DownloadUpdateAsync(_currentUpdate, pct =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
                     UpdateProgressBar.Value = pct;
                     UpdateProgressLabel.Text = $"{pct}%";
