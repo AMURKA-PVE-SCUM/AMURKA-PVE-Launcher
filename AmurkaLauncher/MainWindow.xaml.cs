@@ -590,7 +590,12 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true)
         {
-            _config.ModsPath = dialog.FolderName;
+            string chosen = dialog.FolderName.TrimEnd('\\', '/');
+            if (!chosen.EndsWith("~mods", StringComparison.OrdinalIgnoreCase))
+            {
+                chosen = Path.Combine(chosen, "~mods");
+            }
+            _config.ModsPath = chosen;
             ModsPathInput.Text = _config.ModsPath;
             SaveCurrentConfig();
             _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);

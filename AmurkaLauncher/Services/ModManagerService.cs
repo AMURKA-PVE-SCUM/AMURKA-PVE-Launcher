@@ -185,6 +185,13 @@ public class ModManagerService
             throw new InvalidOperationException("Папка модов не указана");
         }
 
+        // Строгая проверка безопасности: установка разрешена исключительно в папку ~mods
+        var dirInfo = new DirectoryInfo(modsPath);
+        if (!dirInfo.Name.Equals("~mods", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Установка разрешена только в папку ~mods! Текущая папка: {modsPath}");
+        }
+
         // Гарантируем создание целевой папки
         Directory.CreateDirectory(modsPath);
 

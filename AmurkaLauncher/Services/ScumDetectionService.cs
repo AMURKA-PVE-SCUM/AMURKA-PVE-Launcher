@@ -175,22 +175,7 @@ public class ScumDetectionService
 
         // Для стандартного пути SteamLibrary\steamapps\common\SCUM:
         // Моды строго попадают в: SteamLibrary\steamapps\common\SCUM\SCUM\Content\Paks\~mods
-        string standardModsPath = Path.Combine(normalized, "SCUM", "Content", "Paks", "~mods");
-        string altModsPath = Path.Combine(normalized, "Content", "Paks", "~mods");
-
-        // Если SCUM\Content\Paks уже существует или SCUM.exe лежит в SCUM\Binaries\Win64
-        if (Directory.Exists(Path.Combine(normalized, "SCUM", "Content", "Paks")) ||
-            File.Exists(Path.Combine(normalized, "SCUM", "Binaries", "Win64", "SCUM.exe")))
-        {
-            return standardModsPath;
-        }
-
-        if (Directory.Exists(altModsPath))
-        {
-            return altModsPath;
-        }
-
-        return standardModsPath;
+        return Path.Combine(normalized, "SCUM", "Content", "Paks", "~mods");
     }
 
     private static string? GetRegistryValue(string fullKeyPath, string valueName)
