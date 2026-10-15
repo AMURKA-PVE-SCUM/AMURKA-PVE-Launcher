@@ -6,7 +6,7 @@ Unicode true
 
 ; General Settings
 Name "AMURKA PVE Launcher"
-OutFile "dist\AMURKA-PVE-Launcher-Setup-2.1.21.exe"
+OutFile "dist\AMURKA-PVE-Launcher-Setup-2.1.22.exe"
 InstallDir "$LOCALAPPDATA\Programs\AMURKA PVE Launcher"
 InstallDirRegKey HKCU "Software\AMURKA PVE Launcher" "InstallLocation"
 RequestExecutionLevel user
@@ -39,19 +39,20 @@ RequestExecutionLevel user
 !insertmacro MUI_LANGUAGE "Russian"
 
 ; Version Information
-VIProductVersion "2.1.21.0"
+VIProductVersion "2.1.22.0"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductName" "AMURKA PVE Launcher"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "CompanyName" "AMURKA PVE"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "LegalCopyright" "DOMO"
 VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileDescription" "AMURKA PVE SCUM Mod Launcher"
-VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileVersion" "2.1.21.0"
-VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductVersion" "2.1.21.0"
+VIAddVersionKey /LANG=${LANG_RUSSIAN} "FileVersion" "2.1.22.0"
+VIAddVersionKey /LANG=${LANG_RUSSIAN} "ProductVersion" "2.1.22.0"
 
 Section "MainSection" SecMain
     SetOutPath "$INSTDIR"
 
-    ; Копируем файлы лаунчера
+    ; Копируем файлы лаунчера и нативные библиотеки WPF (DirectX/DirectWrite/VCRuntime)
     File "AmurkaLauncher\publish-standalone\AMURKA PVE Launcher.exe"
+    File /nonfatal "AmurkaLauncher\publish-standalone\*.dll"
 
     ; Создаем деинсталлятор
     WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -70,7 +71,7 @@ Section "MainSection" SecMain
     ; Регистрация в "Установка и удаление программ"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayName" "AMURKA PVE Launcher"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayIcon" "$INSTDIR\AMURKA PVE Launcher.exe,0"
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayVersion" "2.1.21"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "DisplayVersion" "2.1.22"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "Publisher" "AMURKA PVE"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "InstallLocation" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -95,6 +96,7 @@ Section "Uninstall"
 
     ; Удаляем файлы программы
     Delete "$INSTDIR\AMURKA PVE Launcher.exe"
+    Delete "$INSTDIR\*.dll"
     Delete "$INSTDIR\uninstall.exe"
     RMDir "$INSTDIR"
 

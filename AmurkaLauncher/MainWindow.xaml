@@ -412,7 +412,7 @@
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock Text="🔄" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                         <TextBlock x:Name="UpdateTitle" Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="UpdateVersionText" Text="v2.1.21" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
+                        <TextBlock x:Name="UpdateVersionText" Text="v2.1.22" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
                         <TextBlock x:Name="UpdateDesc" Text="Нажмите «Скачать», чтобы получить новую версию" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
 
                         <!-- Update Progress -->

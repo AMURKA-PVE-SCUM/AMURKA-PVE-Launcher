@@ -3,7 +3,7 @@ title Сборка AMURKA PVE Launcher
 cd /d "%~dp0"
 
 echo ===================================================
-echo   Сборка AMURKA PVE Launcher (.NET 10 WPF)
+echo   Сборка AMURKA PVE Launcher (.NET 8 LTS)
 echo ===================================================
 echo.
 
@@ -13,7 +13,7 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo ===================================================
     echo   Сборка успешно завершена!
-    echo   Исполняемый файл: AmurkaLauncher\bin\Release\net10.0-windows\AMURKA PVE Launcher.exe
+    echo   Исполняемый файл: AmurkaLauncher\bin\Release\net8.0-windows\AMURKA PVE Launcher.exe
     echo ===================================================
 ) else (
     echo.

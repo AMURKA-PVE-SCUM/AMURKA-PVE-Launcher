@@ -9,14 +9,18 @@ public class ModCategory : INotifyPropertyChanged
     public string Label { get; set; } = string.Empty;
     public bool Required { get; set; }
 
+    private bool _isSelected;
+    private int _totalCount;
+    private int _installedCount;
+
     public bool IsSelected
     {
-        get;
+        get => _isSelected;
         set
         {
-            if (field != value)
+            if (_isSelected != value)
             {
-                field = value;
+                _isSelected = value;
                 OnPropertyChanged();
             }
         }
@@ -24,12 +28,12 @@ public class ModCategory : INotifyPropertyChanged
 
     public int TotalCount
     {
-        get;
+        get => _totalCount;
         set
         {
-            if (field != value)
+            if (_totalCount != value)
             {
-                field = value;
+                _totalCount = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CountDisplay));
             }
@@ -38,12 +42,12 @@ public class ModCategory : INotifyPropertyChanged
 
     public int InstalledCount
     {
-        get;
+        get => _installedCount;
         set
         {
-            if (field != value)
+            if (_installedCount != value)
             {
-                field = value;
+                _installedCount = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CountDisplay));
             }

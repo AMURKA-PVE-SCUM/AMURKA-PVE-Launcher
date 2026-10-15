@@ -7,8 +7,8 @@ echo   Сборка установщика AMURKA PVE Launcher (C#)
 echo ===================================================
 echo.
 
-echo 1. Публикация автономной C# сборки...
-dotnet publish .\AmurkaLauncher\AmurkaLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\AmurkaLauncher\publish-standalone
+echo 1. Публикация автономной C# сборки (.NET 8 LTS)...
+dotnet publish .\AmurkaLauncher\AmurkaLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\AmurkaLauncher\publish-standalone
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ОШИБКА] Ошибка при публикации C# проекта.
