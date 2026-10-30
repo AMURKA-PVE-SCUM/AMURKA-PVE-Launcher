@@ -36,7 +36,6 @@ jobs:
           import urllib.request
 
           repo = os.environ['GITHUB_REPOSITORY']
-          revision = os.environ['GITHUB_SHA']
           headers = {
               'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
               'Accept': 'application/vnd.github+json',
@@ -54,6 +53,8 @@ jobs:
               with urllib.request.urlopen(request, timeout=60) as response:
                   return json.load(response)
 
+          # Coalesced runs must include the newest main, including unrelated commits.
+          revision = api('git/ref/heads/main')['object']['sha']
           tree = api('git/trees/' + revision + '?recursive=1')
           if tree.get('truncated'):
               raise RuntimeError('Incomplete Git tree: refusing to publish a partial catalog')
@@ -85,8 +86,5 @@ jobs:
           except urllib.error.HTTPError as error:
               if error.code != 404:
                   raise
-          if api('git/ref/heads/main')['object']['sha'] != revision:
-              print('A newer commit exists; its workflow will publish the catalog.')
-          else:
-              api('contents/mods.json', payload)
-              print('Published catalog for ' + revision + ': ' + str(len(files)) + ' files')
+          api('contents/mods.json', payload)
+          print('Published catalog for ' + revision + ': ' + str(len(files)) + ' files')
