@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Simulate the previously installed launcher for the optional release check. -->
+    <Version>2.1.22</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../AmurkaLauncher/Services/ModManagerService.cs" Link="ModManagerService.cs" />
+    <Compile Include="../../AmurkaLauncher/Models/ModItem.cs" Link="ModItem.cs" />
+    <Compile Include="../../AmurkaLauncher/Models/ModCategory.cs" Link="ModCategory.cs" />
+    <Compile Include="../../AmurkaLauncher/Services/UpdateService.cs" Link="UpdateService.cs" />
+    <Compile Include="../../AmurkaLauncher/Models/UpdateInfo.cs" Link="UpdateInfo.cs" />
+  </ItemGroup>
+</Project>

@@ -161,7 +161,7 @@
                                             <Border x:Name="b" Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                     <TextBlock Text="⬇  " FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                                                    <TextBlock Text="СКАЧАТЬ ВЫБРАННОЕ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                                    <TextBlock Text="СИНХРОНИЗИРОВАТЬ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
                                                 </StackPanel>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -228,7 +228,7 @@
                             <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
                                 <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
-                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.17" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.23" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <Ellipse x:Name="UpdateStatusDot" Width="7" Height="7" Fill="#555555" Margin="6,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
                             </StackPanel>
                         </Grid>
@@ -375,7 +375,7 @@
                     <TextBlock Grid.Column="0" Text="🆕" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock x:Name="ModsNotifyTitle" Text="Доступно новых модов: 0" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                        <TextBlock x:Name="ModsNotifyTitle" Text="Доступны обновления модов" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
                         <TextBlock x:Name="ModsNotifyDesc" Text="" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
 
@@ -384,7 +384,7 @@
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                                        <TextBlock Text="📥 Скачать новые" FontSize="11" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                        <TextBlock Text="🔄 Обновить моды" FontSize="11" FontWeight="Bold" Foreground="#0A0A0A"/>
                                     </Border>
                                 </ControlTemplate>
                             </Button.Template>

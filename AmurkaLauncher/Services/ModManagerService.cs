@@ -1,8 +1,11 @@
 using System.Buffers;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AmurkaLauncher.Models;
 
@@ -10,27 +13,19 @@ namespace AmurkaLauncher.Services;
 
 public class ModManagerService
 {
-    private const string GitHubRepoOwner = "AMURKA-PVE-SCUM";
-    private const string GitHubRepoName = "amurka-pve-mods";
-    private const string GitHubBranch = "main";
-    private const int DownloadConcurrency = 4;
+    private const string Repository = "AMURKA-PVE-SCUM/amurka-pve-mods";
     private const int BufferSize = 81920;
+    private const string StateFile = ".amurka-installed.json";
+    private readonly HttpClient Client;
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
 
-    private static readonly HttpClient HttpClient = CreateHttpClient();
+    public ModManagerService(HttpClient? client = null) => Client = client ?? SharedClient;
+    private static readonly HttpClient SharedClient = CreateClient();
 
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateClient()
     {
-        var handler = new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-        };
-
-        var client = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromMinutes(5)
-        };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.0");
+        var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.1");
         return client;
     }
 
@@ -50,319 +45,276 @@ public class ModManagerService
     public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory> categories)
     {
         var categorySet = categories.Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Pin downloads to the commit used to read the catalog.
+        using var commitResponse = await Client.GetAsync($"https://api.github.com/repos/{Repository}/commits/main");
+        commitResponse.EnsureSuccessStatusCode();
+        using var commit = JsonDocument.Parse(await commitResponse.Content.ReadAsStringAsync());
+        string revision = commit.RootElement.GetProperty("sha").GetString()!;
+        using var response = await Client.GetAsync($"https://api.github.com/repos/{Repository}/git/trees/{revision}?recursive=1");
+        response.EnsureSuccessStatusCode();
+        using var tree = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        if (tree.RootElement.GetProperty("truncated").GetBoolean())
+            throw new InvalidOperationException("GitHub вернул неполный список модов. Синхронизация остановлена.");
         var result = new List<ModItem>();
+        foreach (var item in tree.RootElement.GetProperty("tree").EnumerateArray())
+        {
+            if (item.GetProperty("type").GetString() != "blob") continue;
+            var parts = item.GetProperty("path").GetString()!.Split('/', 2);
+            if (parts.Length != 2 || !categorySet.Contains(parts[0]) || !IsModFile(parts[1])) continue;
+            ValidateName(parts[1]);
+            result.Add(new ModItem
+            {
+                Name = parts[1], Category = parts[0], Size = item.GetProperty("size").GetInt64(),
+                Sha = item.GetProperty("sha").GetString()!,
+                DownloadUrl = $"https://raw.githubusercontent.com/{Repository}/{revision}/{Uri.EscapeDataString(parts[0])}/{Uri.EscapeDataString(parts[1])}"
+            });
+        }
+        if (result.Count == 0) throw new InvalidOperationException("В репозитории не найдены моды. Синхронизация остановлена.");
+        if (result.GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1))
+            throw new InvalidOperationException("В категориях найдены моды с одинаковыми именами.");
+        return result;
+    }
 
-        // 1) Быстрое получение дерева репозитория через GitHub Tree API за 1 запрос
+    private static bool IsModFile(string name) => name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".sig", StringComparison.OrdinalIgnoreCase);
+    private static void ValidateName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            name.Contains('/') || name.Contains('\\') || name != Path.GetFileName(name) || !IsModFile(name))
+            throw new InvalidOperationException($"Недопустимое имя мода: {name}");
+    }
+    private static void ValidateModsPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !new DirectoryInfo(path).Name.Equals("~mods", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Установка и удаление разрешены только в папке ~mods.");
+    }
+    public List<string> ScanInstalledMods(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return [];
+        return Directory.EnumerateFiles(path).Where(IsModFile).Select(Path.GetFileName).OfType<string>().ToList();
+    }
+
+    // Git's blob SHA-1 includes a header; a plain file SHA-1 is different.
+    public static async Task<string> ComputeGitBlobHashAsync(string path, CancellationToken ct = default)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize, true);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        hash.AppendData(Encoding.ASCII.GetBytes("blob " + stream.Length.ToString(CultureInfo.InvariantCulture) + "\0"));
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try
         {
-            string treeUrl = $"https://api.github.com/repos/{GitHubRepoOwner}/{GitHubRepoName}/git/trees/{GitHubBranch}?recursive=1";
-            using var req = new HttpRequestMessage(HttpMethod.Get, treeUrl);
-            using var response = await HttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-
-            if (response.IsSuccessStatusCode)
-            {
-                await using var stream = await response.Content.ReadAsStreamAsync();
-                using var doc = await JsonDocument.ParseAsync(stream);
-
-                if (doc.RootElement.TryGetProperty("tree", out var tree) && tree.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in tree.EnumerateArray())
-                    {
-                        string path = item.TryGetProperty("path", out var pProp) ? pProp.GetString() ?? string.Empty : string.Empty;
-                        string type = item.TryGetProperty("type", out var tProp) ? tProp.GetString() ?? string.Empty : string.Empty;
-                        long size = item.TryGetProperty("size", out var sProp) ? sProp.GetInt64() : 0;
-
-                        bool isModFile = path.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
-                                         path.EndsWith(".sig", StringComparison.OrdinalIgnoreCase);
-
-                        if (type == "blob" && isModFile)
-                        {
-                            var parts = path.Split('/', 2);
-                            if (parts.Length == 2 && categorySet.Contains(parts[0]))
-                            {
-                                string category = parts[0];
-                                string fileName = parts[1];
-                                string rawUrl = $"https://raw.githubusercontent.com/{GitHubRepoOwner}/{GitHubRepoName}/{GitHubBranch}/{Uri.EscapeDataString(category)}/{Uri.EscapeDataString(fileName)}";
-
-                                result.Add(new ModItem
-                                {
-                                    Name = fileName,
-                                    DownloadUrl = rawUrl,
-                                    Size = size,
-                                    Category = category,
-                                    IsInstalled = false
-                                });
-                            }
-                        }
-                    }
-                }
-            }
+            int count;
+            while ((count = await stream.ReadAsync(buffer.AsMemory(0, BufferSize), ct)) > 0) hash.AppendData(buffer, 0, count);
+            return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         }
-        catch
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
+    }
+    private static async Task<bool> IsCurrentAsync(ModItem mod, string path, CancellationToken ct)
+    {
+        ValidateName(mod.Name);
+        if (mod.Sha.Length != 40 || !mod.Sha.All(Uri.IsHexDigit)) throw new InvalidOperationException($"Нет контрольной суммы для {mod.Name}");
+        try
         {
-            // Fallback to per-category
+            return File.Exists(path) && new FileInfo(path).Length == mod.Size &&
+                string.Equals(await ComputeGitBlobHashAsync(path, ct), mod.Sha, StringComparison.OrdinalIgnoreCase);
         }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+    public async Task RefreshInstalledStateAsync(IEnumerable<ModItem> mods, string path, CancellationToken ct = default)
+    {
+        foreach (var mod in mods) mod.IsInstalled = !string.IsNullOrWhiteSpace(path) && await IsCurrentAsync(mod, Path.Combine(path, mod.Name), ct);
+    }
 
-        // 2) Fallback: опрос по категориям через GitHub Contents API
-        if (result.Count == 0)
+    public async Task<(int success, int errors)> DownloadAllModsAsync(List<ModItem> mods, string modsPath,
+        Action<int, string, long, long> onProgress, CancellationToken ct = default)
+    {
+        ValidateModsPath(modsPath);
+        await _syncLock.WaitAsync(ct);
+        try
         {
-            foreach (var cat in categories)
+            Directory.CreateDirectory(modsPath);
+            var state = ReadState(modsPath);
+            await RefreshInstalledStateAsync(mods, modsPath, ct);
+            var queue = mods.Where(m => !m.IsInstalled).ToList();
+            long total = queue.Sum(m => m.Size), downloaded = 0;
+            int errors = 0;
+            var staged = new List<(ModItem Mod, string Temp)>();
+            // Validate the whole selection before replacing any installed file.
+            foreach (var mod in queue)
             {
+                ct.ThrowIfCancellationRequested();
+                string temp = Path.Combine(modsPath, $".amurka-{mod.Name}-{mod.Sha}.part");
                 try
                 {
-                    string url = $"https://api.github.com/repos/{GitHubRepoOwner}/{GitHubRepoName}/contents/{cat.Id}";
-                    using var response = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-                    if (!response.IsSuccessStatusCode) continue;
-
-                    await using var stream = await response.Content.ReadAsStreamAsync();
-                    using var doc = await JsonDocument.ParseAsync(stream);
-
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    if (!await IsCurrentAsync(mod, temp, ct))
                     {
-                        foreach (var item in doc.RootElement.EnumerateArray())
+                        await DownloadSingleFileAsync(mod, temp, delta =>
                         {
-                            string type = item.TryGetProperty("type", out var t) ? t.GetString() ?? string.Empty : string.Empty;
-                            string name = item.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
-                            string downloadUrl = item.TryGetProperty("download_url", out var d) ? d.GetString() ?? string.Empty : string.Empty;
-                            long size = item.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
-
-                            bool isModFile = name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
-                                             name.EndsWith(".sig", StringComparison.OrdinalIgnoreCase);
-
-                            if (type == "file" && isModFile)
-                            {
-                                if (string.IsNullOrEmpty(downloadUrl))
-                                {
-                                    downloadUrl = $"https://raw.githubusercontent.com/{GitHubRepoOwner}/{GitHubRepoName}/{GitHubBranch}/{cat.Id}/{Uri.EscapeDataString(name)}";
-                                }
-
-                                result.Add(new ModItem
-                                {
-                                    Name = name,
-                                    DownloadUrl = downloadUrl,
-                                    Size = size,
-                                    Category = cat.Id,
-                                    IsInstalled = false
-                                });
-                            }
+                            downloaded += delta;
+                            onProgress(total > 0 ? (int)Math.Min(99, downloaded * 100 / total) : 0, mod.Name, downloaded, total);
+                        }, ct);
+                        if (!await IsCurrentAsync(mod, temp, ct))
+                        {
+                            File.Delete(temp);
+                            throw new IOException($"Контрольная сумма не совпала: {mod.Name}");
                         }
+                    }
+                    staged.Add((mod, temp));
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) when (ex is IOException or HttpRequestException or UnauthorizedAccessException)
+                {
+                    errors++;
+                    onProgress(0, $"Ошибка {mod.Name}: {ex.Message}", downloaded, total);
+                }
+            }
+            if (errors > 0) return (0, errors);
+            var backups = new List<(string Destination, string? Backup)>();
+            bool preserveBackups = false;
+            try
+            {
+                // Prepare rollback copies before touching any installed .pak/.sig pair.
+                foreach (var (mod, _) in staged)
+                {
+                    string dest = Path.Combine(modsPath, mod.Name);
+                    string? backup = File.Exists(dest) ? dest + "." + Guid.NewGuid().ToString("N") + ".bak" : null;
+                    if (backup != null) File.Copy(dest, backup);
+                    backups.Add((dest, backup));
+                }
+                int applied = 0;
+                try
+                {
+                    foreach (var (mod, temp) in staged)
+                    {
+                        File.Move(temp, Path.Combine(modsPath, mod.Name), overwrite: true);
+                        applied++;
                     }
                 }
                 catch
                 {
-                    // Ignore
-                }
-            }
-        }
-
-        if (result.Count == 0)
-        {
-            throw new InvalidOperationException("Не удалось получить список модов с GitHub");
-        }
-
-        return result;
-    }
-
-    public List<string> ScanInstalledMods(string modsPath)
-    {
-        if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath))
-        {
-            return [];
-        }
-
-        try
-        {
-            var list = new List<string>();
-            foreach (var file in Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly))
-            {
-                if (file.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
-                    file.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
-                {
-                    string? name = Path.GetFileName(file);
-                    if (!string.IsNullOrEmpty(name))
+                    try
                     {
-                        list.Add(name);
+                        foreach (var (dest, backup) in backups.Take(applied).Reverse())
+                        {
+                            if (backup != null) File.Move(backup, dest, overwrite: true);
+                            else File.Delete(dest);
+                        }
                     }
+                    catch { preserveBackups = true; throw; }
+                    throw;
                 }
-            }
-            return list;
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    public async Task<(int success, int errors)> DownloadAllModsAsync(
-        List<ModItem> mods,
-        string modsPath,
-        Action<int, string, long, long> onProgress,
-        CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(modsPath))
-        {
-            throw new InvalidOperationException("Папка модов не указана");
-        }
-
-        // Строгая проверка безопасности: установка разрешена исключительно в папку ~mods
-        var dirInfo = new DirectoryInfo(modsPath);
-        if (!dirInfo.Name.Equals("~mods", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException($"Установка разрешена только в папку ~mods! Текущая папка: {modsPath}");
-        }
-
-        Directory.CreateDirectory(modsPath);
-
-        // Определяем очередь модов: отсутствующие или недокачанные файлы
-        var queue = mods.Where(m =>
-        {
-            string dest = Path.Combine(modsPath, m.Name);
-            if (!File.Exists(dest)) return true;
-            if (m.Size > 0 && new FileInfo(dest).Length != m.Size) return true;
-            return false;
-        }).ToList();
-
-        long totalBytes = queue.Sum(m => m.Size);
-        int success = mods.Count - queue.Count;
-        int errors = 0;
-
-        if (queue.Count == 0)
-        {
-            onProgress(100, "Все моды уже установлены", totalBytes, totalBytes);
-            return (success, errors);
-        }
-
-        // Учитываем уже имеющиеся байты частично скачанных файлов для плавного прогресса
-        long initialDownloadedBytes = 0;
-        foreach (var m in queue)
-        {
-            string dest = Path.Combine(modsPath, m.Name);
-            if (File.Exists(dest))
-            {
-                try
-                {
-                    long len = new FileInfo(dest).Length;
-                    if (m.Size <= 0 || len < m.Size)
-                    {
-                        initialDownloadedBytes += len;
-                    }
-                }
-                catch { }
-            }
-        }
-
-        long totalDownloadedBytes = initialDownloadedBytes;
-        int lastReportedPercent = -1;
-
-        void ReportProgress(string currentFile)
-        {
-            long currentTotal = Interlocked.Read(ref totalDownloadedBytes);
-            int percent = totalBytes > 0 ? (int)Math.Min(100, Math.Round((double)currentTotal / totalBytes * 100)) : 0;
-            if (percent != lastReportedPercent)
-            {
-                lastReportedPercent = percent;
-                onProgress(percent, currentFile, currentTotal, totalBytes);
-            }
-        }
-
-        using var semaphore = new SemaphoreSlim(DownloadConcurrency, DownloadConcurrency);
-        var tasks = queue.Select(async mod =>
-        {
-            await semaphore.WaitAsync(ct);
-            try
-            {
-                string dest = Path.Combine(modsPath, mod.Name);
-                if (File.Exists(dest) && (mod.Size <= 0 || new FileInfo(dest).Length == mod.Size))
-                {
-                    Interlocked.Increment(ref success);
-                    return;
-                }
-
-                await DownloadSingleFileAsync(mod.DownloadUrl, dest, mod.Size, bytesDelta =>
-                {
-                    Interlocked.Add(ref totalDownloadedBytes, bytesDelta);
-                    ReportProgress(mod.Name);
-                }, ct);
-
-                ReportProgress(mod.Name);
-                Interlocked.Increment(ref success);
-            }
-            catch
-            {
-                Interlocked.Increment(ref errors);
             }
             finally
             {
-                semaphore.Release();
+                if (!preserveBackups)
+                    foreach (var (_, backup) in backups)
+                        if (backup != null && File.Exists(backup)) File.Delete(backup);
             }
-        });
-
-        await Task.WhenAll(tasks);
-        onProgress(100, "Завершение...", totalBytes, totalBytes);
-
-        return (success, errors);
+            foreach (var mod in mods) mod.IsInstalled = true;
+            foreach (var mod in mods) state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
+            WriteState(modsPath, state);
+            onProgress(100, "Моды актуальны", total, total);
+            return (mods.Count, 0);
+        }
+        finally { _syncLock.Release(); }
     }
-
-    private static async Task DownloadSingleFileAsync(
-        string url,
-        string destPath,
-        long expectedSize,
-        Action<int> onBytesRead,
-        CancellationToken ct)
+    private async Task DownloadSingleFileAsync(ModItem mod, string temp, Action<long> onBytes, CancellationToken ct)
     {
-        long existingLength = 0;
-        if (File.Exists(destPath))
-        {
-            try
-            {
-                existingLength = new FileInfo(destPath).Length;
-                if (expectedSize > 0 && existingLength > expectedSize)
-                {
-                    File.Delete(destPath);
-                    existingLength = 0;
-                }
-            }
-            catch { }
-        }
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        if (existingLength > 0)
-        {
-            request.Headers.Range = new RangeHeaderValue(existingLength, null);
-        }
-
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-
-        // Если Range не поддерживается или вернулась ошибка 416, качаем заново
+        long offset = File.Exists(temp) ? new FileInfo(temp).Length : 0;
+        if (offset >= mod.Size) { File.Delete(temp); offset = 0; }
+        using var request = new HttpRequestMessage(HttpMethod.Get, mod.DownloadUrl);
+        if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
+        using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
-            File.Delete(destPath);
-            await DownloadSingleFileAsync(url, destPath, expectedSize, onBytesRead, ct);
+            File.Delete(temp);
+            await DownloadSingleFileAsync(mod, temp, onBytes, ct);
             return;
         }
-
         response.EnsureSuccessStatusCode();
-
-        bool isAppend = response.StatusCode == HttpStatusCode.PartialContent && existingLength > 0;
-        await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-        await using var fileStream = new FileStream(destPath, isAppend ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
-
+        bool append = offset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+        if (response.StatusCode == HttpStatusCode.PartialContent &&
+            (response.Content.Headers.ContentRange?.From != offset || response.Content.Headers.ContentRange?.Length != mod.Size))
+            throw new IOException("Сервер вернул неверный диапазон файла.");
+        if (append) onBytes(offset);
+        await using var input = await response.Content.ReadAsStreamAsync(ct);
+        await using var output = new FileStream(temp, append ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, true);
         byte[] buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         try
         {
-            int bytesRead;
-            while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, BufferSize), ct)) > 0)
+            int count;
+            while ((count = await input.ReadAsync(buffer.AsMemory(0, BufferSize), ct)) > 0)
             {
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
-                onBytesRead(bytesRead);
+                if (output.Length + count > mod.Size) throw new IOException("Размер загрузки превышает ожидаемый.");
+                await output.WriteAsync(buffer.AsMemory(0, count), ct);
+                onBytes(count);
             }
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
     }
 
+    public sealed class ManagedMod
+    {
+        public string Name { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Sha { get; set; } = "";
+    }
+    private static Dictionary<string, ManagedMod> ReadState(string path)
+    {
+        string file = Path.Combine(path, StateFile);
+        if (!File.Exists(file)) return new(StringComparer.OrdinalIgnoreCase);
+        var entries = JsonSerializer.Deserialize<List<ManagedMod>>(File.ReadAllText(file))
+            ?? throw new InvalidOperationException("Повреждён список установленных модов.");
+        foreach (var entry in entries) ValidateName(entry.Name);
+        return entries.ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
+    }
+    private static void WriteState(string path, Dictionary<string, ManagedMod> state)
+    {
+        string file = Path.Combine(path, StateFile);
+        File.WriteAllText(file + ".tmp", JsonSerializer.Serialize(state.Values.ToList()));
+        File.Move(file + ".tmp", file, overwrite: true);
+    }
+
+    public void RecordVerifiedInstalledMods(IEnumerable<ModItem> mods, string modsPath)
+    {
+        ValidateModsPath(modsPath);
+        if (!Directory.Exists(modsPath)) return;
+        var state = ReadState(modsPath);
+        foreach (var mod in mods.Where(m => m.IsInstalled))
+            state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
+        WriteState(modsPath, state);
+    }
+    public async Task RemoveObsoleteModsAsync(List<ModItem> catalog, IEnumerable<string> selectedCategories, string modsPath)
+    {
+        ValidateModsPath(modsPath);
+        if (!Directory.Exists(modsPath)) return;
+        var selected = selectedCategories.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var current = catalog.Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var state = ReadState(modsPath);
+        foreach (var old in state.Values.ToList())
+        {
+            if (!selected.Contains(old.Category) || current.Contains(old.Name)) continue;
+            string path = Path.Combine(modsPath, old.Name);
+            if (File.Exists(path) && !string.Equals(await ComputeGitBlobHashAsync(path), old.Sha, StringComparison.OrdinalIgnoreCase)) continue;
+            File.Delete(path);
+            state.Remove(old.Name);
+        }
+        WriteState(modsPath, state);
+    }
+
+    public async Task<List<ManagedMod>> FindObsoleteModsAsync(List<ModItem> catalog, string modsPath)
+    {
+        var result = new List<ManagedMod>();
+        if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath)) return result;
+        var names = catalog.Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var mod in ReadState(modsPath).Values)
+        {
+            string path = Path.Combine(modsPath, mod.Name);
+            if (!names.Contains(mod.Name) && File.Exists(path) &&
+                string.Equals(await ComputeGitBlobHashAsync(path), mod.Sha, StringComparison.OrdinalIgnoreCase)) result.Add(mod);
+        }
+        return result;
+    }
     public int DeleteAllMods(string modsPath)
     {
         if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath))

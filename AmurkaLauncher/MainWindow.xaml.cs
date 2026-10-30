@@ -43,8 +43,11 @@ public partial class MainWindow : Window
     private List<ModItem> _availableMods = [];
     private List<string> _installedMods = [];
     private List<ModItem> _notifyMods = [];
+    private List<ModManagerService.ManagedMod> _obsoleteMods = [];
 
     private bool _isDownloading;
+    private bool _isLoadingMods;
+    private DateTime _lastModCheck = DateTime.MinValue;
     private UpdateInfo? _currentUpdate;
     private string? _downloadedInstallerPath;
 
@@ -77,6 +80,8 @@ public partial class MainWindow : Window
         try
         {
             await CheckForUpdatesAsync();
+            if (!_isDownloading && !_isLoadingMods && DateTime.UtcNow - _lastModCheck > TimeSpan.FromMinutes(5))
+                await LoadModsAsync();
         }
         catch (Exception ex)
         {
@@ -246,6 +251,7 @@ public partial class MainWindow : Window
                     cat.IsSelected = !cat.IsSelected;
                     UpdateChipStyle(border, cat, labelText, countBadge, countText);
                     SaveCurrentConfig();
+                    RefreshNotifyBanner();
                 };
             }
 
@@ -288,15 +294,20 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task LoadModsAsync()
+    private async Task<bool> LoadModsAsync()
     {
+        if (_isLoadingMods || _isDownloading) return false;
         if (string.IsNullOrWhiteSpace(_config.ModsPath))
         {
             SetStatus("Настройте пути установки", false);
-            return;
+            return false;
         }
 
-        SetStatus("Загрузка списка модов...");
+        _isLoadingMods = true;
+        SetModControlsEnabled(false);
+        DownloadBtn.IsEnabled = false;
+        ModsNotifyDownloadBtn.IsEnabled = false;
+        SetStatus("Проверка версий модов...");
         ProgressSection.Visibility = Visibility.Visible;
         DownloadProgressBar.Value = 0;
         ProgressLabel.Text = "Подключение к репозиторию модов...";
@@ -304,19 +315,29 @@ public partial class MainWindow : Window
         try
         {
             _availableMods = await _modManagerService.FetchAvailableModsAsync(_categories);
+            await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
+            _modManagerService.RecordVerifiedInstalledMods(_availableMods, _config.ModsPath);
+            _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
+            _lastModCheck = DateTime.UtcNow;
             _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
 
             UpdateCounts();
             RefreshNotifyBanner();
             SetStatus($"Доступно модов: {_availableMods.Count}");
+            return true;
         }
         catch (Exception ex)
         {
             SetStatus($"Ошибка: {ex.Message}", false);
             ShowToast("Не удалось загрузить список модов", isError: true);
+            return false;
         }
         finally
         {
+            _isLoadingMods = false;
+            SetModControlsEnabled(true);
+            DownloadBtn.IsEnabled = true;
+            ModsNotifyDownloadBtn.IsEnabled = true;
             ProgressSection.Visibility = Visibility.Collapsed;
         }
     }
@@ -332,7 +353,7 @@ public partial class MainWindow : Window
         {
             var catMods = _availableMods.Where(m => m.Category == cat.Id).ToList();
             cat.TotalCount = catMods.Count;
-            cat.InstalledCount = catMods.Count(m => installedSet.Contains(m.Name));
+            cat.InstalledCount = catMods.Count(m => m.IsInstalled && installedSet.Contains(m.Name));
         }
 
         RefreshCategoryChipsCounts();
@@ -343,9 +364,11 @@ public partial class MainWindow : Window
         if (_availableMods.Count == 0) return;
 
         var installedSet = new HashSet<string>(_installedMods, StringComparer.OrdinalIgnoreCase);
-        _notifyMods = _availableMods.Where(m => !installedSet.Contains(m.Name)).ToList();
+        var selected = _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id).ToHashSet();
+        _notifyMods = _availableMods.Where(m => selected.Contains(m.Category) && (!m.IsInstalled || !installedSet.Contains(m.Name))).ToList();
+        int obsoleteCount = _obsoleteMods.Count(m => selected.Contains(m.Category));
 
-        if (_notifyMods.Count == 0)
+        if (_notifyMods.Count == 0 && obsoleteCount == 0)
         {
             ModsNotifyBanner.Visibility = Visibility.Collapsed;
             return;
@@ -360,8 +383,8 @@ public partial class MainWindow : Window
         }
 
         string breakdown = string.Join(" · ", byCat.Select(kv => $"{kv.Key}: {kv.Value}"));
-        ModsNotifyTitle.Text = $"Доступно новых модов: {_notifyMods.Count}";
-        ModsNotifyDesc.Text = breakdown;
+        ModsNotifyTitle.Text = $"Нужна синхронизация: {_notifyMods.Count + obsoleteCount}";
+        ModsNotifyDesc.Text = string.Join(" · ", new[] { breakdown, obsoleteCount > 0 ? $"Устаревших файлов: {obsoleteCount}" : "" }.Where(s => s.Length > 0));
         ModsNotifyBanner.Visibility = Visibility.Visible;
     }
 
@@ -384,7 +407,7 @@ public partial class MainWindow : Window
 
     private async Task DownloadModsListAsync(List<ModItem> toDownload)
     {
-        if (_isDownloading) return;
+        if (_isDownloading || _isLoadingMods) return;
 
         if (toDownload.Count == 0)
         {
@@ -399,6 +422,7 @@ public partial class MainWindow : Window
         }
 
         _isDownloading = true;
+        SetModControlsEnabled(false);
         LaunchBtn.IsEnabled = false;
         DownloadBtn.IsEnabled = false;
         DeleteBtn.IsEnabled = false;
@@ -407,6 +431,8 @@ public partial class MainWindow : Window
 
         try
         {
+            if (IsGameRunning())
+                throw new InvalidOperationException("Закройте SCUM перед обновлением модов.");
             var (success, errors) = await _modManagerService.DownloadAllModsAsync(
                 toDownload,
                 _config.ModsPath,
@@ -421,11 +447,22 @@ public partial class MainWindow : Window
                     });
                 });
 
+            if (errors == 0)
+                await _modManagerService.RemoveObsoleteModsAsync(_availableMods,
+                    _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id), _config.ModsPath);
+            await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
+            _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
+
             _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
             UpdateCounts();
             RefreshNotifyBanner();
 
-            if (success > 0)
+            if (errors > 0)
+            {
+                ShowToast($"Не удалось обновить моды. Ошибок: {errors}. Повторите загрузку.", isError: true);
+                SetStatus("Обновление модов не завершено", false);
+            }
+            else if (success > 0)
             {
                 ShowToast($"✅ Скачано: {success}, ошибок: {errors}");
                 SetStatus($"Скачано модов: {success}");
@@ -449,6 +486,7 @@ public partial class MainWindow : Window
             DeleteBtn.IsEnabled = true;
             ModsNotifyDownloadBtn.IsEnabled = true;
             _isDownloading = false;
+            SetModControlsEnabled(true);
         }
     }
 
@@ -467,6 +505,25 @@ public partial class MainWindow : Window
     }
 
     // --- Button Event Handlers ---
+
+    private static bool IsGameRunning()
+    {
+        var processes = Process.GetProcesses();
+        try { return processes.Any(p => p.ProcessName.Equals("SCUM", StringComparison.OrdinalIgnoreCase) ||
+            p.ProcessName.StartsWith("SCUM-Win64-Shipping", StringComparison.OrdinalIgnoreCase)); }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    private void SetModControlsEnabled(bool enabled)
+    {
+        GamePathInput.IsEnabled = enabled;
+        ModsPathInput.IsEnabled = enabled;
+        BrowseGameBtn.IsEnabled = enabled;
+        BrowseModsBtn.IsEnabled = enabled;
+        CategoryChipsPanel.IsEnabled = enabled;
+        DeleteBtn.IsEnabled = enabled;
+        LaunchBtn.IsEnabled = enabled;
+    }
 
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -508,6 +565,13 @@ public partial class MainWindow : Window
 
     private async void LaunchBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (_isDownloading || _isLoadingMods) return;
+        if (!await LoadModsAsync()) return;
+        if (ModsNotifyBanner.Visibility == Visibility.Visible)
+        {
+            ShowToast("Обновите выбранные моды перед запуском SCUM", isError: true);
+            return;
+        }
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
         if (exe == null)
         {
@@ -542,6 +606,8 @@ public partial class MainWindow : Window
 
     private async void DownloadBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (_isDownloading || _isLoadingMods) return;
+        if (!await LoadModsAsync()) return;
         var selectedCats = _categories.Where(c => c.IsSelected).Select(c => c.Id).ToHashSet();
         var selectedMods = _availableMods.Where(m => selectedCats.Contains(m.Category)).ToList();
         await DownloadModsListAsync(selectedMods);
@@ -549,6 +615,7 @@ public partial class MainWindow : Window
 
     private void DeleteBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (_isDownloading || _isLoadingMods) return;
         _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
         if (_installedMods.Count == 0)
         {
@@ -620,7 +687,7 @@ public partial class MainWindow : Window
         SaveCurrentConfig();
     }
 
-    private void BrowseModsBtn_Click(object sender, RoutedEventArgs e)
+    private async void BrowseModsBtn_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFolderDialog
         {
@@ -638,9 +705,7 @@ public partial class MainWindow : Window
             _config.ModsPath = chosen;
             ModsPathInput.Text = _config.ModsPath;
             SaveCurrentConfig();
-            _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
-            UpdateCounts();
-            RefreshNotifyBanner();
+            await LoadModsAsync();
         }
     }
 
@@ -651,6 +716,8 @@ public partial class MainWindow : Window
 
         _config.ModsPath = val;
         SaveCurrentConfig();
+        foreach (var mod in _availableMods) mod.IsInstalled = false;
+        _obsoleteMods = [];
         _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
         UpdateCounts();
         RefreshNotifyBanner();
@@ -677,7 +744,10 @@ public partial class MainWindow : Window
 
     private async void ModsNotifyDownloadBtn_Click(object sender, RoutedEventArgs e)
     {
-        await DownloadModsListAsync(_notifyMods);
+        if (_isDownloading || _isLoadingMods) return;
+        if (!await LoadModsAsync()) return;
+        var selected = _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id).ToHashSet();
+        await DownloadModsListAsync(_availableMods.Where(m => selected.Contains(m.Category)).ToList());
     }
 
     private void ModsNotifyLaterBtn_Click(object sender, RoutedEventArgs e)
