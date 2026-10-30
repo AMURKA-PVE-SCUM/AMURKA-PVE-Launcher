@@ -9,7 +9,7 @@
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
     <AssemblyName>AMURKA PVE Launcher</AssemblyName>
     <RootNamespace>AmurkaLauncher</RootNamespace>
-    <Version>2.1.23</Version>
+    <Version>2.1.24</Version>
     <Authors>DOMO</Authors>
     <Company>AMURKA PVE</Company>
     <Product>AMURKA PVE Launcher</Product>

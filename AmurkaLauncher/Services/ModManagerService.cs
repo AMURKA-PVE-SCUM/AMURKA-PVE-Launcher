@@ -45,8 +45,27 @@ public class ModManagerService
     public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory> categories)
     {
         var categorySet = categories.Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Static catalog is generated in the mods repository by GitHub Actions.
+        // Client machines never need a token or an API request in normal operation.
+        using var catalogResponse = await Client.GetAsync($"https://raw.githubusercontent.com/{Repository}/main/mods.json");
+        if (catalogResponse.IsSuccessStatusCode)
+        {
+            using var catalog = JsonDocument.Parse(await catalogResponse.Content.ReadAsStringAsync());
+            var root = catalog.RootElement;
+            if (root.GetProperty("schemaVersion").GetInt32() != 1)
+                throw new InvalidOperationException("Неизвестный формат каталога модов.");
+            string catalogRevision = root.GetProperty("revision").GetString()!;
+            if (catalogRevision.Length != 40 || !catalogRevision.All(Uri.IsHexDigit))
+                throw new InvalidOperationException("В каталоге модов указана неверная версия сборки.");
+            return ParseModFiles(root.GetProperty("files"), categorySet, catalogRevision);
+        }
+        // Compatibility fallback only while the static catalog has not been set up.
+        if (catalogResponse.StatusCode != HttpStatusCode.NotFound)
+            throw new InvalidOperationException("Не удалось загрузить каталог модов. Проверьте подключение и повторите попытку.");
         // Pin downloads to the commit used to read the catalog.
         using var commitResponse = await Client.GetAsync($"https://api.github.com/repos/{Repository}/commits/main");
+        if (commitResponse.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+            throw new InvalidOperationException("GitHub временно ограничил запросы. Статический каталог модов ещё не доступен. Повторите проверку позже.");
         commitResponse.EnsureSuccessStatusCode();
         using var commit = JsonDocument.Parse(await commitResponse.Content.ReadAsStringAsync());
         string revision = commit.RootElement.GetProperty("sha").GetString()!;
@@ -55,17 +74,26 @@ public class ModManagerService
         using var tree = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         if (tree.RootElement.GetProperty("truncated").GetBoolean())
             throw new InvalidOperationException("GitHub вернул неполный список модов. Синхронизация остановлена.");
+        return ParseModFiles(tree.RootElement.GetProperty("tree"), categorySet, revision);
+    }
+
+    private static List<ModItem> ParseModFiles(JsonElement files, HashSet<string> categorySet, string revision)
+    {
         var result = new List<ModItem>();
-        foreach (var item in tree.RootElement.GetProperty("tree").EnumerateArray())
+        foreach (var item in files.EnumerateArray())
         {
-            if (item.GetProperty("type").GetString() != "blob") continue;
+            if (item.TryGetProperty("type", out var type) && type.GetString() != "blob") continue;
             var parts = item.GetProperty("path").GetString()!.Split('/', 2);
             if (parts.Length != 2 || !categorySet.Contains(parts[0]) || !IsModFile(parts[1])) continue;
             ValidateName(parts[1]);
+            long size = item.GetProperty("size").GetInt64();
+            string sha = item.GetProperty("sha").GetString()!;
+            if (size < 0 || sha.Length != 40 || !sha.All(Uri.IsHexDigit))
+                throw new InvalidOperationException($"В каталоге неверные данные файла: {parts[1]}");
             result.Add(new ModItem
             {
-                Name = parts[1], Category = parts[0], Size = item.GetProperty("size").GetInt64(),
-                Sha = item.GetProperty("sha").GetString()!,
+                Name = parts[1], Category = parts[0], Size = size,
+                Sha = sha,
                 DownloadUrl = $"https://raw.githubusercontent.com/{Repository}/{revision}/{Uri.EscapeDataString(parts[0])}/{Uri.EscapeDataString(parts[1])}"
             });
         }

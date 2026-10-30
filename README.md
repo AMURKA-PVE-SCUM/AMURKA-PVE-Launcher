@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-2.1.23-00FF88?style=for-the-badge&logo=github)
+![Version](https://img.shields.io/badge/version-2.1.24-00FF88?style=for-the-badge&logo=github)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue?style=for-the-badge&logo=windows)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20LTS%20WPF-512BD4?style=for-the-badge&logo=dotnet)
 ![SCUM Server](https://img.shields.io/badge/Server-85.88.179.207%3A7004-orange?style=for-the-badge)
@@ -32,7 +32,7 @@
 
 ### 1. Скачивание и установка
 1. Перейдите в раздел [**Releases**](https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest).
-2. Скачайте последнюю версию инсталлятора: `AMURKA-PVE-Launcher-Setup-2.1.23.exe`.
+2. Скачайте последнюю версию инсталлятора: `AMURKA-PVE-Launcher-Setup-2.1.24.exe`.
 3. Запустите установщик. Программа автоматически создаст удобные ярлыки на **Рабочем столе** и в **меню «Пуск»**.
 
 ### 2. Запуск и настройка
@@ -58,7 +58,10 @@
 `AMURKA-PVE-SCUM/amurka-pve-mods`, в ветке `main`. Связанные файлы публикуйте
 одним коммитом, чтобы игроки получали согласованную версию. Имя файла менять
 не нужно: лаунчер сравнивает содержимое по Git blob SHA-1, включая обновления
-с прежним размером файла. Отдельный номер версии или манифест на сервере не нужен.
+с прежним размером файла. С версии 2.1.24 клиент читает статический `mods.json`,
+а проверку версии лаунчера начинает со статического `dist/launcher.json`.
+Обычные проверки не расходуют лимит GitHub API. Генерация каталога настраивается
+в репозитории модов отдельно: [инструкция и workflow](tools/mod-catalog/README.md).
 
 Лаунчер проверяет моды при открытии, раз в пять минут, перед скачиванием и
 перед запуском игры. Баннер учитывает обязательные и выбранные категории.

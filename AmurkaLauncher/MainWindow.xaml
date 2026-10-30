@@ -228,7 +228,7 @@
                             <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
                                 <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
-                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.23" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.24" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <Ellipse x:Name="UpdateStatusDot" Width="7" Height="7" Fill="#555555" Margin="6,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
                             </StackPanel>
                         </Grid>

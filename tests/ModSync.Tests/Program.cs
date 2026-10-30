@@ -131,6 +131,8 @@ try
 
     var snapshotHandler = new FakeHandler(request =>
     {
+        if (request.RequestUri!.Host == "raw.githubusercontent.com")
+            return new(HttpStatusCode.NotFound);
         string json = request.RequestUri!.AbsolutePath.Contains("/commits/")
             ? "{\"sha\":\"fixed-commit\"}"
             : "{\"truncated\":false,\"tree\":[{\"path\":\"core/test.pak\",\"type\":\"blob\",\"size\":8,\"sha\":\"" + Hash(updated) + "\"}]}";
@@ -141,6 +143,33 @@ try
     var catalogService = new ModManagerService(new HttpClient(snapshotHandler));
     var catalog = await catalogService.FetchAvailableModsAsync(catalogService.GetDefaultCategories());
     Check(catalog.Single().DownloadUrl.Contains("/fixed-commit/core/test.pak"), "download URL uses the same immutable commit");
+
+    string staticRevision = new string('a', 40);
+    var staticHandler = new FakeHandler(request =>
+    {
+        Check(request.RequestUri!.Host == "raw.githubusercontent.com", "mod catalog avoids GitHub API entirely");
+        return new(HttpStatusCode.OK) { Content = new StringContent("{\"schemaVersion\":1,\"revision\":\"" + staticRevision +
+            "\",\"files\":[{\"path\":\"core/test.pak\",\"size\":8,\"sha\":\"" + Hash(updated) + "\"}]}") };
+    });
+    var staticService = new ModManagerService(new HttpClient(staticHandler));
+    var staticCatalog = await staticService.FetchAvailableModsAsync(staticService.GetDefaultCategories());
+    Check(staticHandler.Count == 1 && staticCatalog.Single().DownloadUrl.Contains("/" + staticRevision + "/"), "static catalog preserves immutable download URLs");
+    var noUpdateHandler = new FakeHandler(request =>
+    {
+        Check(request.RequestUri!.Host == "raw.githubusercontent.com", "up-to-date launcher does not consume API quota");
+        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.22\"}") };
+    });
+    var noUpdateClient = new HttpClient(noUpdateHandler);
+    Check(await new UpdateService(noUpdateClient, noUpdateClient).CheckForUpdateAsync() == null && noUpdateHandler.Count == 1,
+        "current static launcher metadata stops further checks");
+    var newUpdateHandler = new FakeHandler(request =>
+    {
+        Check(request.RequestUri!.Host != "api.github.com", "available update is found without GitHub API");
+        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.24\",\"file\":\"AMURKA-PVE-Launcher-Setup-2.1.24.exe\",\"size\":100}") };
+    });
+    var newUpdateClient = new HttpClient(newUpdateHandler);
+    Check((await new UpdateService(newUpdateClient, newUpdateClient).CheckForUpdateAsync())?.Version == "2.1.24" && newUpdateHandler.Count == 1,
+        "new static launcher metadata supplies an update without API requests");
 
     if (args.Contains("--live"))
     {
@@ -156,8 +185,8 @@ try
     {
         var updater = new UpdateService();
         var release = await updater.CheckForUpdateAsync();
-        Check(updater.CurrentVersion == "2.1.22" && release?.Version == "2.1.23", "previous launcher detects published 2.1.23 update");
-        Check(release!.DownloadUrl.EndsWith("/v2.1.23/AMURKA-PVE-Launcher-Setup-2.1.23.exe"), "updater resolves the published installer asset");
+        Check(updater.CurrentVersion == "2.1.23" && release?.Version == "2.1.24", "previous launcher detects published 2.1.24 update");
+        Check(release!.DownloadUrl.EndsWith("/v2.1.24/AMURKA-PVE-Launcher-Setup-2.1.24.exe"), "updater resolves the published installer asset");
     }
     Console.WriteLine($"All {checks} checks passed.");
 }

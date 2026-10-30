@@ -1,0 +1,92 @@
+name: Update launcher mod catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'speed/**'
+      - 'skins/**'
+      - 'weapons/**'
+      - 'buildings/**'
+      - 'music/**'
+      - '.github/workflows/update-mod-catalog.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: launcher-mod-catalog
+  cancel-in-progress: true
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate and publish mods.json
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import base64
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          revision = os.environ['GITHUB_SHA']
+          headers = {
+              'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'AMURKA-Mod-Catalog',
+          }
+
+          def api(path, payload=None):
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + repo + '/' + path,
+                  data=json.dumps(payload).encode() if payload is not None else None,
+                  headers=headers,
+                  method='PUT' if payload is not None else 'GET',
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          tree = api('git/trees/' + revision + '?recursive=1')
+          if tree.get('truncated'):
+              raise RuntimeError('Incomplete Git tree: refusing to publish a partial catalog')
+          categories = {'core', 'speed', 'skins', 'weapons', 'buildings', 'music'}
+          files = []
+          names = set()
+          for item in tree['tree']:
+              parts = item['path'].split('/')
+              if (item['type'] != 'blob' or len(parts) != 2 or parts[0] not in categories
+                      or not parts[1].lower().endswith(('.pak', '.sig'))):
+                  continue
+              if parts[1].lower() in names:
+                  raise RuntimeError('Duplicate mod filename: ' + parts[1])
+              names.add(parts[1].lower())
+              files.append({key: item[key] for key in ('path', 'sha', 'size')})
+          if not files:
+              raise RuntimeError('Empty catalog: refusing to publish')
+          files.sort(key=lambda item: item['path'])
+          content = json.dumps({'schemaVersion': 1, 'revision': revision, 'files': files},
+                               ensure_ascii=False, indent=2).encode('utf-8') + b'\n'
+          payload = {
+              'message': 'chore: update launcher mod catalog [skip ci]',
+              'content': base64.b64encode(content).decode('ascii'),
+              'branch': 'main',
+          }
+          try:
+              existing = api('contents/mods.json?ref=main')
+              payload['sha'] = existing['sha']
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          if api('git/ref/heads/main')['object']['sha'] != revision:
+              print('A newer commit exists; its workflow will publish the catalog.')
+          else:
+              api('contents/mods.json', payload)
+              print('Published catalog for ' + revision + ': ' + str(len(files)) + ' files')
