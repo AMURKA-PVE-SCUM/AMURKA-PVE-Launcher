@@ -16,10 +16,6 @@ public partial class MainWindow : Window
     private const string ServerIp = "85.88.179.207:7004";
 
     // Статичные замороженные кисти для исключения аллокаций и утечек памяти UI
-    private static readonly SolidColorBrush ChipSelectedBorder = CreateFrozenBrush(Color.FromArgb(80, 0, 255, 136));
-    private static readonly SolidColorBrush ChipSelectedBadge = CreateFrozenBrush(Color.FromArgb(40, 0, 255, 136));
-    private static readonly SolidColorBrush ChipUnselectedBg = CreateFrozenBrush(Color.FromArgb(60, 0, 0, 0));
-    private static readonly SolidColorBrush ChipUnselectedBadge = CreateFrozenBrush(Color.FromArgb(20, 255, 255, 255));
     private static readonly SolidColorBrush ModeActiveForeground = CreateFrozenBrush(Color.FromRgb(10, 10, 10));
     private static readonly SolidColorBrush UpdateDotInactive = CreateFrozenBrush(Color.FromRgb(85, 85, 85));
 
@@ -39,7 +35,6 @@ public partial class MainWindow : Window
     private readonly LauncherVerificationService _verificationService = new();
 
     private LauncherConfig _config = new();
-    private List<ModCategory> _categories = [];
     private List<ModItem> _availableMods = [];
     private List<string> _installedMods = [];
     private List<ModItem> _notifyMods = [];
@@ -107,16 +102,6 @@ public partial class MainWindow : Window
         AppVersionText.Text = $" · v{_updateService.CurrentVersion}";
 
         _config = _configService.LoadConfig();
-        _categories = _modManagerService.GetDefaultCategories();
-
-        // Восстановление выбранных категорий
-        foreach (var cat in _categories)
-        {
-            if (_config.Categories.TryGetValue(cat.Id, out bool isSelected))
-            {
-                cat.IsSelected = cat.Required || isSelected;
-            }
-        }
 
         // Автопоиск игры, если путь не задан или неверен
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
@@ -137,7 +122,6 @@ public partial class MainWindow : Window
 
         UpdatePathsUi();
         UpdateModeButtonsUi();
-        BuildCategoryChips();
 
         SaveCurrentConfig();
 
@@ -160,7 +144,6 @@ public partial class MainWindow : Window
 
     private void SaveCurrentConfig()
     {
-        _config.Categories = _categories.ToDictionary(c => c.Id, c => c.IsSelected);
         _configService.SaveConfig(_config);
     }
 
@@ -197,103 +180,6 @@ public partial class MainWindow : Window
         btn.Cursor = Cursors.Hand;
     }
 
-    private void BuildCategoryChips()
-    {
-        CategoryChipsPanel.Children.Clear();
-
-        foreach (var cat in _categories)
-        {
-            var border = new Border
-            {
-                CornerRadius = new CornerRadius(14),
-                BorderThickness = new Thickness(1),
-                Margin = new Thickness(0, 0, 6, 6),
-                Padding = new Thickness(10, 4, 10, 4),
-                Cursor = cat.Required ? Cursors.Arrow : Cursors.Hand,
-                Tag = cat
-            };
-
-            var stack = new StackPanel { Orientation = Orientation.Horizontal };
-            var labelText = new TextBlock
-            {
-                Text = cat.Label,
-                FontSize = 10,
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            var countBadge = new Border
-            {
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(6, 1, 6, 1),
-                Margin = new Thickness(6, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            var countText = new TextBlock
-            {
-                Text = cat.CountDisplay,
-                FontSize = 9,
-                FontWeight = FontWeights.Bold
-            };
-
-            countBadge.Child = countText;
-            stack.Children.Add(labelText);
-            stack.Children.Add(countBadge);
-            border.Child = stack;
-
-            UpdateChipStyle(border, cat, labelText, countBadge, countText);
-
-            if (!cat.Required)
-            {
-                border.MouseLeftButtonUp += (s, _) =>
-                {
-                    cat.IsSelected = !cat.IsSelected;
-                    UpdateChipStyle(border, cat, labelText, countBadge, countText);
-                    SaveCurrentConfig();
-                    RefreshNotifyBanner();
-                };
-            }
-
-            CategoryChipsPanel.Children.Add(border);
-        }
-    }
-
-    private void UpdateChipStyle(Border border, ModCategory cat, TextBlock labelText, Border countBadge, TextBlock countText)
-    {
-        if (cat.IsSelected)
-        {
-            border.Background = (Brush)FindResource("AccentDimBrush");
-            border.BorderBrush = ChipSelectedBorder;
-            labelText.Foreground = (Brush)FindResource("AccentBrush");
-            countBadge.Background = ChipSelectedBadge;
-            countText.Foreground = (Brush)FindResource("AccentBrush");
-        }
-        else
-        {
-            border.Background = ChipUnselectedBg;
-            border.BorderBrush = (Brush)FindResource("CardBorderBrush");
-            labelText.Foreground = (Brush)FindResource("TextSecondaryBrush");
-            countBadge.Background = ChipUnselectedBadge;
-            countText.Foreground = (Brush)FindResource("TextTertiaryBrush");
-        }
-        countText.Text = cat.CountDisplay;
-    }
-
-    private void RefreshCategoryChipsCounts()
-    {
-        foreach (var child in CategoryChipsPanel.Children)
-        {
-            if (child is Border b && b.Tag is ModCategory cat && b.Child is StackPanel sp && sp.Children.Count >= 2)
-            {
-                var labelText = (TextBlock)sp.Children[0];
-                var countBadge = (Border)sp.Children[1];
-                var countText = (TextBlock)countBadge.Child;
-                UpdateChipStyle(b, cat, labelText, countBadge, countText);
-            }
-        }
-    }
-
     private async Task<bool> LoadModsAsync()
     {
         if (_isLoadingMods || _isDownloading) return false;
@@ -314,7 +200,7 @@ public partial class MainWindow : Window
 
         try
         {
-            _availableMods = await _modManagerService.FetchAvailableModsAsync(_categories);
+            _availableMods = await _modManagerService.FetchAvailableModsAsync();
             await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
             _modManagerService.RecordVerifiedInstalledMods(_availableMods, _config.ModsPath);
             _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
@@ -346,17 +232,6 @@ public partial class MainWindow : Window
     {
         AvailableCountText.Text = _availableMods.Count.ToString();
         InstalledCountText.Text = _installedMods.Count.ToString();
-
-        var installedSet = new HashSet<string>(_installedMods, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var cat in _categories)
-        {
-            var catMods = _availableMods.Where(m => m.Category == cat.Id).ToList();
-            cat.TotalCount = catMods.Count;
-            cat.InstalledCount = catMods.Count(m => m.IsInstalled && installedSet.Contains(m.Name));
-        }
-
-        RefreshCategoryChipsCounts();
     }
 
     private void RefreshNotifyBanner()
@@ -364,9 +239,8 @@ public partial class MainWindow : Window
         if (_availableMods.Count == 0) return;
 
         var installedSet = new HashSet<string>(_installedMods, StringComparer.OrdinalIgnoreCase);
-        var selected = _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id).ToHashSet();
-        _notifyMods = _availableMods.Where(m => selected.Contains(m.Category) && (!m.IsInstalled || !installedSet.Contains(m.Name))).ToList();
-        int obsoleteCount = _obsoleteMods.Count(m => selected.Contains(m.Category));
+        _notifyMods = _availableMods.Where(m => !m.IsInstalled || !installedSet.Contains(m.Name)).ToList();
+        int obsoleteCount = _obsoleteMods.Count;
 
         if (_notifyMods.Count == 0 && obsoleteCount == 0)
         {
@@ -374,17 +248,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var byCat = new Dictionary<string, int>();
-        foreach (var m in _notifyMods)
-        {
-            var cat = _categories.FirstOrDefault(c => c.Id == m.Category);
-            string label = cat?.Label ?? m.Category;
-            byCat[label] = byCat.GetValueOrDefault(label) + 1;
-        }
+        var parts = new List<string>();
+        if (_notifyMods.Count > 0) parts.Add($"Новых/обновленных: {_notifyMods.Count}");
+        if (obsoleteCount > 0) parts.Add($"Устаревших: {obsoleteCount}");
 
-        string breakdown = string.Join(" · ", byCat.Select(kv => $"{kv.Key}: {kv.Value}"));
         ModsNotifyTitle.Text = $"Нужна синхронизация: {_notifyMods.Count + obsoleteCount}";
-        ModsNotifyDesc.Text = string.Join(" · ", new[] { breakdown, obsoleteCount > 0 ? $"Устаревших файлов: {obsoleteCount}" : "" }.Where(s => s.Length > 0));
+        ModsNotifyDesc.Text = string.Join(" · ", parts);
         ModsNotifyBanner.Visibility = Visibility.Visible;
     }
 
@@ -448,8 +317,7 @@ public partial class MainWindow : Window
                 });
 
             if (errors == 0)
-                await _modManagerService.RemoveObsoleteModsAsync(_availableMods,
-                    _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id), _config.ModsPath);
+                await _modManagerService.RemoveObsoleteModsAsync(_availableMods, _config.ModsPath);
             await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
             _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
 
@@ -520,7 +388,6 @@ public partial class MainWindow : Window
         ModsPathInput.IsEnabled = enabled;
         BrowseGameBtn.IsEnabled = enabled;
         BrowseModsBtn.IsEnabled = enabled;
-        CategoryChipsPanel.IsEnabled = enabled;
         DeleteBtn.IsEnabled = enabled;
         LaunchBtn.IsEnabled = enabled;
     }
@@ -608,9 +475,7 @@ public partial class MainWindow : Window
     {
         if (_isDownloading || _isLoadingMods) return;
         if (!await LoadModsAsync()) return;
-        var selectedCats = _categories.Where(c => c.IsSelected).Select(c => c.Id).ToHashSet();
-        var selectedMods = _availableMods.Where(m => selectedCats.Contains(m.Category)).ToList();
-        await DownloadModsListAsync(selectedMods);
+        await DownloadModsListAsync(_availableMods);
     }
 
     private void DeleteBtn_Click(object sender, RoutedEventArgs e)
@@ -746,8 +611,7 @@ public partial class MainWindow : Window
     {
         if (_isDownloading || _isLoadingMods) return;
         if (!await LoadModsAsync()) return;
-        var selected = _categories.Where(c => c.IsSelected || c.Required).Select(c => c.Id).ToHashSet();
-        await DownloadModsListAsync(_availableMods.Where(m => selected.Contains(m.Category)).ToList());
+        await DownloadModsListAsync(_availableMods);
     }
 
     private void ModsNotifyLaterBtn_Click(object sender, RoutedEventArgs e)

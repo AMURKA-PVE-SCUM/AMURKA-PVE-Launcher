@@ -59,7 +59,7 @@ public partial class UpdateService
         get
         {
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.24";
+            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.25";
         }
     }
 

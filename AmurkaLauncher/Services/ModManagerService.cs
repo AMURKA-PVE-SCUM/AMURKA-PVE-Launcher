@@ -33,18 +33,13 @@ public class ModManagerService
     {
         return
         [
-            new ModCategory { Id = "core", Label = "Основные", Required = true, IsSelected = true },
-            new ModCategory { Id = "speed", Label = "Скорость транспорта", Required = false, IsSelected = false },
-            new ModCategory { Id = "skins", Label = "Скины одежды", Required = false, IsSelected = false },
-            new ModCategory { Id = "weapons", Label = "Скины на оружие", Required = false, IsSelected = false },
-            new ModCategory { Id = "buildings", Label = "Скины на постройки", Required = false, IsSelected = false },
-            new ModCategory { Id = "music", Label = "Музыка", Required = false, IsSelected = false }
+            new ModCategory { Id = "core", Label = "Основные", Required = true, IsSelected = true }
         ];
     }
 
-    public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory> categories)
+    public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory>? categories = null)
     {
-        var categorySet = categories.Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var categorySet = (categories ?? GetDefaultCategories()).Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // Static catalog is generated in the mods repository by GitHub Actions.
         // Client machines never need a token or an API request in normal operation.
         using var catalogResponse = await Client.GetAsync($"https://raw.githubusercontent.com/{Repository}/main/mods.json");
@@ -312,6 +307,11 @@ public class ModManagerService
             state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
         WriteState(modsPath, state);
     }
+    public Task RemoveObsoleteModsAsync(List<ModItem> catalog, string modsPath)
+    {
+        return RemoveObsoleteModsAsync(catalog, new[] { "core", "speed", "skins", "weapons", "buildings", "music" }, modsPath);
+    }
+
     public async Task RemoveObsoleteModsAsync(List<ModItem> catalog, IEnumerable<string> selectedCategories, string modsPath)
     {
         ValidateModsPath(modsPath);

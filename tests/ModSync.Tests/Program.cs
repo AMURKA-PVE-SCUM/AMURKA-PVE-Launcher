@@ -165,10 +165,10 @@ try
     var newUpdateHandler = new FakeHandler(request =>
     {
         Check(request.RequestUri!.Host != "api.github.com", "available update is found without GitHub API");
-        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.24\",\"file\":\"AMURKA-PVE-Launcher-Setup-2.1.24.exe\",\"size\":100}") };
+        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.26\",\"file\":\"AMURKA-PVE-Launcher-Setup-2.1.26.exe\",\"size\":100}") };
     });
     var newUpdateClient = new HttpClient(newUpdateHandler);
-    Check((await new UpdateService(newUpdateClient, newUpdateClient).CheckForUpdateAsync())?.Version == "2.1.24" && newUpdateHandler.Count == 1,
+    Check((await new UpdateService(newUpdateClient, newUpdateClient).CheckForUpdateAsync())?.Version == "2.1.26" && newUpdateHandler.Count == 1,
         "new static launcher metadata supplies an update without API requests");
 
     if (args.Contains("--live"))
@@ -185,8 +185,8 @@ try
     {
         var updater = new UpdateService();
         var release = await updater.CheckForUpdateAsync();
-        Check(updater.CurrentVersion == "2.1.23" && release?.Version == "2.1.24", "previous launcher detects published 2.1.24 update");
-        Check(release!.DownloadUrl.EndsWith("/v2.1.24/AMURKA-PVE-Launcher-Setup-2.1.24.exe"), "updater resolves the published installer asset");
+        Check(updater.CurrentVersion == "2.1.24" && release?.Version == "2.1.25", "previous launcher detects published 2.1.25 update");
+        Check(release!.DownloadUrl.EndsWith("/v2.1.25/AMURKA-PVE-Launcher-Setup-2.1.25.exe"), "updater resolves the published installer asset");
     }
     Console.WriteLine($"All {checks} checks passed.");
 }

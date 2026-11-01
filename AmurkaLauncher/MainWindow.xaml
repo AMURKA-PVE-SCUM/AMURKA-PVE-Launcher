@@ -68,8 +68,7 @@
                                 <RowDefinition Height="Auto"/> <!-- Progress -->
                                 <RowDefinition Height="Auto"/> <!-- Status -->
                                 <RowDefinition Height="Auto"/> <!-- Stats -->
-                                <RowDefinition Height="Auto"/> <!-- Action Buttons -->
-                                <RowDefinition Height="*"/>    <!-- Categories -->
+                                <RowDefinition Height="*"/>    <!-- Action Buttons -->
                                 <RowDefinition Height="Auto"/> <!-- Mode Select -->
                                 <RowDefinition Height="Auto"/> <!-- Footer -->
                             </Grid.RowDefinitions>
@@ -199,16 +198,8 @@
                                 </Button>
                             </StackPanel>
 
-                            <!-- Categories Chips -->
-                            <StackPanel Grid.Row="5" Margin="0,0,0,10">
-                                <TextBlock Text="КАТЕГОРИИ МОДОВ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,6"/>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="100">
-                                    <WrapPanel x:Name="CategoryChipsPanel" Margin="0,0,0,4"/>
-                                </ScrollViewer>
-                            </StackPanel>
-
                             <!-- Mode Select -->
-                            <StackPanel Grid.Row="6" Margin="0,0,0,10">
+                            <StackPanel Grid.Row="5" Margin="0,0,0,10">
                                 <TextBlock Text="РЕЖИМ ЗАПУСКА" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,6"/>
                                 <Border Background="#44000000" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="8" Padding="3">
                                     <Grid>
@@ -225,10 +216,10 @@
                             </StackPanel>
 
                             <!-- Footer -->
-                            <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                            <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
                                 <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
-                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.24" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.25" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <Ellipse x:Name="UpdateStatusDot" Width="7" Height="7" Fill="#555555" Margin="6,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
                             </StackPanel>
                         </Grid>
