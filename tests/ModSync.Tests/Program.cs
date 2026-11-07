@@ -129,6 +129,15 @@ try
     service.RecordVerifiedInstalledMods([obsolete], migrated);
     Check((await service.FindObsoleteModsAsync([mod], migrated)).Count == 1, "verified existing files are tracked before the first update");
 
+    string untrackedDir = Folder("untracked");
+    await service.DownloadAllModsAsync([mod], untrackedDir, (_, _, _, _) => { });
+    await File.WriteAllBytesAsync(Path.Combine(untrackedDir, "rogue_extra.pak"), old);
+    await File.WriteAllBytesAsync(Path.Combine(untrackedDir, "rogue_mod.zip"), old);
+    var foundUntracked = service.FindUntrackedOrObsoleteFiles([mod], untrackedDir);
+    Check(foundUntracked.Count == 2, "untracked files are detected in mods folder");
+    int removedUntracked = await service.RemoveObsoleteAndUntrackedModsAsync([mod], untrackedDir);
+    Check(removedUntracked == 2 && !File.Exists(Path.Combine(untrackedDir, "rogue_extra.pak")) && !File.Exists(Path.Combine(untrackedDir, "rogue_mod.zip")) && File.Exists(Path.Combine(untrackedDir, mod.Name)), "purge removes only untracked files leaving official repo mods intact");
+
     var snapshotHandler = new FakeHandler(request =>
     {
         if (request.RequestUri!.Host == "raw.githubusercontent.com")

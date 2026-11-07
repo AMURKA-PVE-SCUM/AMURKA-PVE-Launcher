@@ -24,5 +24,6 @@ dist/*.yml
 # Logs and temporary files
 *.log
 *.tmp
+AmurkaInstaller/payload.zip
 .DS_Store
 Thumbs.db

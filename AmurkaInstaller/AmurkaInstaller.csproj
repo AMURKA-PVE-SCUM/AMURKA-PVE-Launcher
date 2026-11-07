@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <LangVersion>12.0</LangVersion>
+    <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
+    <AssemblyName>AMURKA PVE Launcher Setup</AssemblyName>
+    <RootNamespace>AmurkaInstaller</RootNamespace>
+    <Version>2.1.26</Version>
+    <FileVersion>2.1.26.0</FileVersion>
+    <ProductVersion>2.1.26.0</ProductVersion>
+    <Company>AMURKA PVE</Company>
+    <Product>AMURKA PVE Launcher Installer</Product>
+    <Description>Брендированный установщик AMURKA PVE Launcher</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
+  </ItemGroup>
+
+</Project>

@@ -6,13 +6,14 @@
         xmlns:controls="clr-namespace:AmurkaLauncher.Controls"
         mc:Ignorable="d"
         Title="AMURKA PVE Launcher"
-        Height="640" Width="980"
-        MinHeight="540" MinWidth="820"
+        Height="560" Width="960"
+        MinHeight="520" MinWidth="860"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="#0A0A0A"
-        Icon="Resources/icon.ico">
+        Icon="Resources/icon.ico"
+        StateChanged="Window_StateChanged">
 
     <Border BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="12">
         <Grid ClipToBounds="True">
@@ -29,31 +30,120 @@
 
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="42"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Custom Title Bar -->
-                <Grid Grid.Row="0" Background="#99000000" MouseLeftButtonDown="TitleBar_MouseDown">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <!-- Custom Title Bar (Tailwind Dark Cyberpunk) -->
+                <Border Grid.Row="0" Background="#90090D14" BorderBrush="#18FFFFFF" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseDown">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                        <TextBlock Text="AMURKA" FontWeight="Bold" FontSize="13" Foreground="#FFFFFF"/>
-                        <TextBlock Text=" PVE" FontWeight="Bold" FontSize="13" Foreground="{StaticResource AccentBrush}" Margin="2,0,0,0"/>
-                    </StackPanel>
+                        <!-- Left: Branding & Icon -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                            <Image Source="Resources/icon.ico" Width="18" Height="18" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="AMURKA" FontWeight="Black" FontSize="13" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                            <TextBlock Text="PVE" FontWeight="Black" FontSize="13" Foreground="{StaticResource AccentBrush}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            <Border Background="#1600FF88" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="4" Padding="6,1.5" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="LAUNCHER" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                            </Border>
+                            <Border Background="#186C5CE7" BorderBrush="#356C5CE7" BorderThickness="1" CornerRadius="4" Padding="6,1.5" Margin="6,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="v2.1.26" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
+                            </Border>
+                        </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-                        <Button Style="{StaticResource TitleBarBtnStyle}" Content="─" Click="MinimizeBtn_Click"/>
-                        <Button Style="{StaticResource TitleBarBtnStyle}" Content="□" Click="MaximizeBtn_Click"/>
-                        <Button Style="{StaticResource TitleBarCloseBtnStyle}" Content="✕" Click="CloseBtn_Click"/>
-                    </StackPanel>
-                </Grid>
+                        <!-- Center: Draggable Area -->
+                        <Grid Grid.Column="1" Background="Transparent"/>
+
+                        <!-- Right: Window Action Controls -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                            <!-- Minimize -->
+                            <Button Style="{StaticResource TitleBarBtnStyle}" Click="MinimizeBtn_Click" ToolTip="Свернуть">
+                                <Path Data="{StaticResource IconWinMinimizeGeometry}"
+                                      Stroke="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Button>
+
+                            <!-- Maximize / Restore -->
+                            <Button x:Name="MaximizeBtn" Style="{StaticResource TitleBarBtnStyle}" Click="MaximizeBtn_Click" ToolTip="Развернуть">
+                                <Path x:Name="MaximizeIconPath" Data="{StaticResource IconWinMaximizeGeometry}"
+                                      Stroke="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.2" StrokeLineJoin="Round"
+                                      Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Button>
+
+                            <!-- Close -->
+                            <Button Style="{StaticResource TitleBarCloseBtnStyle}" Click="CloseBtn_Click" ToolTip="Закрыть">
+                                <Path Data="{StaticResource IconWinCloseGeometry}"
+                                      Stroke="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Dedicated Notification Banner (Row 1 - Never overlaps inputs!) -->
+                <Border x:Name="ModsNotifyBanner" Grid.Row="1" Margin="14,10,14,0"
+                        Background="#F0091C14" BorderBrush="#6000FF88" BorderThickness="1" CornerRadius="10" Padding="14,8"
+                        Visibility="Collapsed">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#00FF88" BlurRadius="20" Opacity="0.25" ShadowDepth="2"/>
+                    </Border.Effect>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Path Grid.Column="0" Data="{StaticResource IconSparklesGeometry}" Fill="{StaticResource AccentBrush}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock x:Name="ModsNotifyTitle" Text="Требуется синхронизация" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock x:Name="ModsNotifyDesc" Text="" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="ModsNotifyDownloadBtn" Margin="0,0,8,0" Padding="14,6" Cursor="Hand" Click="ModsNotifyDownloadBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Path Data="{StaticResource IconRefreshGeometry}" Stroke="#0A0A0A" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="11" Height="11" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Синхронизировать" FontSize="11" FontWeight="Bold" Foreground="#0A0A0A" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Opacity" Value="0.9"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+
+                            <Button Padding="10,6" Cursor="Hand" Click="ModsNotifyLaterBtn_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <TextBlock Text="Позже" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
                 <!-- Main Layout -->
-                <Grid Grid.Row="1" Margin="14">
+                <Grid Grid.Row="2" Margin="14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1.1*"/>
                         <ColumnDefinition Width="14"/>
@@ -68,23 +158,44 @@
                                 <RowDefinition Height="Auto"/> <!-- Progress -->
                                 <RowDefinition Height="Auto"/> <!-- Status -->
                                 <RowDefinition Height="Auto"/> <!-- Stats -->
-                                <RowDefinition Height="*"/>    <!-- Action Buttons -->
+                                <RowDefinition Height="Auto"/> <!-- Action Buttons -->
                                 <RowDefinition Height="Auto"/> <!-- Mode Select -->
+                                <RowDefinition Height="*"/>    <!-- Spacer -->
                                 <RowDefinition Height="Auto"/> <!-- Footer -->
                             </Grid.RowDefinitions>
 
                             <!-- Logo Section -->
-                            <StackPanel Grid.Row="0">
-                                <TextBlock Text="AMURKA" FontSize="28" FontWeight="Black" Foreground="#FFFFFF"/>
-                                <TextBlock Text="PVE MOD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,6"/>
-                                <Border Background="#14FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="14"
-                                        Padding="10,4" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonUp="ServerInfo_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="SCUM Server | 85.88.179.207:7004" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <TextBlock Text=" 📋" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="AMURKA" FontSize="28" FontWeight="Black" Foreground="#FFFFFF"/>
+                                    <TextBlock Text="PVE MOD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,6"/>
+                                    <Border Background="#14FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="14"
+                                            Padding="10,4" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonUp="ServerInfo_Click">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="SCUM Server | 85.88.179.207:7004" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                            <Path Data="{StaticResource IconCopyGeometry}" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="11" Height="11" Stretch="Uniform" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Sleek Version Badge in Header -->
+                                <Border Grid.Column="1" VerticalAlignment="Top" Margin="0,4,0,0"
+                                        Background="#1400FF88" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8" Padding="8,4">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,6,0">
+                                            <Ellipse.Effect>
+                                                <DropShadowEffect Color="#00FF88" BlurRadius="6" ShadowDepth="0"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                        <TextBlock Text="v2.1.26" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </Grid>
 
                             <!-- Progress Section -->
                             <StackPanel x:Name="ProgressSection" Grid.Row="1" Margin="0,10,0,0" Visibility="Collapsed">
@@ -137,8 +248,8 @@
                                                     <DropShadowEffect Color="#00FF88" BlurRadius="20" Opacity="0.3" ShadowDepth="0"/>
                                                 </Border.Effect>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock Text="▶  " FontSize="14" FontWeight="Bold" Foreground="#0A0A0A"/>
-                                                    <TextBlock Text="ЗАПУСТИТЬ ИГРУ" FontSize="13" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                                    <Path Data="{StaticResource IconPlayGeometry}" Fill="#0A0A0A" Width="12" Height="12" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="ЗАПУСТИТЬ ИГРУ" FontSize="13" FontWeight="Bold" Foreground="#0A0A0A" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -159,8 +270,8 @@
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="b" Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock Text="⬇  " FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                                                    <TextBlock Text="СИНХРОНИЗИРОВАТЬ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                                    <Path Data="{StaticResource IconRefreshGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="СИНХРОНИЗИРОВАТЬ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -181,8 +292,8 @@
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="b" Background="Transparent" BorderBrush="#35FF4757" BorderThickness="1" CornerRadius="8">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock Text="✕  " FontSize="12" FontWeight="Bold" Foreground="{StaticResource DangerBrush}"/>
-                                                    <TextBlock Text="УДАЛИТЬ ВСЕ МОДЫ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource DangerBrush}"/>
+                                                    <Path Data="{StaticResource IconTrashGeometry}" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="УДАЛИТЬ ВСЕ МОДЫ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Border>
                                             <ControlTemplate.Triggers>
@@ -216,12 +327,17 @@
                             </StackPanel>
 
                             <!-- Footer -->
-                            <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
-                                <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
-                                <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
-                                <TextBlock x:Name="AppVersionText" Text=" · v2.1.25" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
-                                <Ellipse x:Name="UpdateStatusDot" Width="7" Height="7" Fill="#555555" Margin="6,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
-                            </StackPanel>
+                            <Border Grid.Row="7" Background="#14000000" BorderBrush="#18FFFFFF" BorderThickness="1" CornerRadius="6" Padding="10,4" HorizontalAlignment="Center" Margin="0,4,0,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
+                                    <TextBlock Text=" · " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    <Border Background="#1800FF88" CornerRadius="3" Padding="4,1" Margin="2,0,4,0">
+                                        <TextBlock x:Name="AppVersionText" Text="v2.1.26" FontSize="9.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                    </Border>
+                                    <Ellipse x:Name="UpdateStatusDot" Width="6" Height="6" Fill="#555555" Margin="2,0,0,0" ToolTip="Проверка обновлений автоматически каждые 60 сек"/>
+                                </StackPanel>
+                            </Border>
                         </Grid>
                     </Border>
 
@@ -234,27 +350,30 @@
                                 <RowDefinition Height="Auto"/> <!-- Mods Path -->
                                 <RowDefinition Height="Auto"/> <!-- Title: Links -->
                                 <RowDefinition Height="Auto"/> <!-- Links Grid -->
+                                <RowDefinition Height="Auto"/> <!-- Title: Tools -->
+                                <RowDefinition Height="Auto"/> <!-- Tools Content -->
                                 <RowDefinition Height="*"/>    <!-- Spacer -->
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Text="ПУТИ УСТАНОВКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+                            <TextBlock Grid.Row="0" Text="ПУТИ УСТАНОВКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
 
                             <!-- Game Path Group -->
-                            <StackPanel Grid.Row="1" Margin="0,0,0,12">
-                                <TextBlock Text="Папка игры" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                            <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                                <TextBlock Text="Папка с игрой SCUM" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="GamePathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}" TextChanged="GamePathInput_TextChanged"/>
-                                    <Button x:Name="BrowseGameBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseGameBtn_Click"
+                                    <TextBox x:Name="GamePathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
+                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="GamePathInput_TextChanged"/>
+                                    <Button x:Name="BrowseGameBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseGameBtn_Click" ToolTip="Выбрать папку с игрой"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
-                                                    <TextBlock Text="📁" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Path Data="{StaticResource IconFolderOpenGeometry}" Fill="{StaticResource PurpleBrush}" Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </ControlTemplate>
                                         </Button.Template>
@@ -267,21 +386,22 @@
                             </StackPanel>
 
                             <!-- Mods Path Group -->
-                            <StackPanel Grid.Row="2" Margin="0,0,0,24">
-                                <TextBlock Text="Папка модов (~mods)" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                            <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                                <TextBlock Text="Папка модификаций (~mods)" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="ModsPathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}" TextChanged="ModsPathInput_TextChanged"/>
-                                    <Button x:Name="BrowseModsBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseModsBtn_Click"
+                                    <TextBox x:Name="ModsPathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
+                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="ModsPathInput_TextChanged"/>
+                                    <Button x:Name="BrowseModsBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseModsBtn_Click" ToolTip="Выбрать папку модов"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
-                                                    <TextBlock Text="📁" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Path Data="{StaticResource IconFolderOpenGeometry}" Fill="{StaticResource PurpleBrush}" Width="16" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </ControlTemplate>
                                         </Button.Template>
@@ -290,7 +410,7 @@
                             </StackPanel>
 
                             <!-- Links Section -->
-                            <TextBlock Grid.Row="3" Text="ССЫЛКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+                            <TextBlock Grid.Row="3" Text="ССЫЛКИ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
 
                             <Grid Grid.Row="4">
                                 <Grid.RowDefinitions>
@@ -308,9 +428,9 @@
                                 <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
                                         Background="{StaticResource PurpleDimBrush}" BorderBrush="#356C5CE7" Foreground="{StaticResource PurpleBrush}"
                                         Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/votes">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🗳 " FontSize="14"/>
-                                        <TextBlock Text="Голосование"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource IconFlameGeometry}" Fill="{StaticResource PurpleBrush}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Голосование" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
 
@@ -318,9 +438,9 @@
                                 <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
                                         Background="#20FDCB6E" BorderBrush="#35FDCB6E" Foreground="{StaticResource YellowBrush}"
                                         Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/shop">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🛒 " FontSize="14"/>
-                                        <TextBlock Text="Магазин"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource IconShoppingBagGeometry}" Stroke="{StaticResource YellowBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Магазин" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
 
@@ -328,9 +448,9 @@
                                 <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
                                         Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" Foreground="{StaticResource AccentBrush}"
                                         Click="OpenLink_Click" Tag="https://amurka-pve-scum.github.io/">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🌐 " FontSize="14"/>
-                                        <TextBlock Text="Сайт"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource IconGlobeGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Сайт сервера" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
 
@@ -338,60 +458,55 @@
                                 <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
                                         Background="#205865F2" BorderBrush="#355865F2" Foreground="{StaticResource DiscordBrush}"
                                         Click="OpenLink_Click" Tag="https://lolka.gg/nmgHA2I">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="💬 " FontSize="14"/>
-                                        <TextBlock Text="Lolka"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource IconMessagesGeometry}" Stroke="{StaticResource DiscordBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Discord Lolka" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
+
+                            <!-- Tools / Maintenance Section -->
+                            <TextBlock Grid.Row="5" Text="ОБСЛУЖИВАНИЕ SCUM" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,12,0,8"/>
+
+                            <Border Grid.Row="6" Background="#14000000" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="8" Padding="12,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock Text="Очистка клиента и кэша" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                        <TextBlock Text="Закрывает SCUM и удаляет кэш %LOCALAPPDATA%\SCUM при сбоях" FontSize="9.5" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <Button x:Name="WipeClientBtn" Grid.Column="1" Height="34" Padding="14,0" Cursor="Hand" Click="WipeClientBtn_Click"
+                                            Background="{StaticResource DangerDimBrush}" BorderBrush="#35FF4757" BorderThickness="1">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Path Data="{StaticResource IconTrashGeometry}" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="11" Height="11" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Очистить" FontSize="11" FontWeight="Bold" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="b" Property="Background" Value="#35FF4757"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>
             </Grid>
-
-            <!-- NOTIFICATION BANNER (Top) -->
-            <Border x:Name="ModsNotifyBanner" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,50,0,0"
-                    Background="#F0091C14" BorderBrush="#6000FF88" BorderThickness="1" CornerRadius="12" Padding="14,10"
-                    Visibility="Collapsed" MaxWidth="620">
-                <Border.Effect>
-                    <DropShadowEffect Color="#00FF88" BlurRadius="25" Opacity="0.3" ShadowDepth="4"/>
-                </Border.Effect>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Column="0" Text="🆕" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock x:Name="ModsNotifyTitle" Text="Доступны обновления модов" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                        <TextBlock x:Name="ModsNotifyDesc" Text="" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="ModsNotifyDownloadBtn" Margin="0,0,6,0" Padding="14,6" Cursor="Hand" Click="ModsNotifyDownloadBtn_Click">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                                        <TextBlock Text="🔄 Обновить моды" FontSize="11" FontWeight="Bold" Foreground="#0A0A0A"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
-                        <Button Padding="10,6" Cursor="Hand" Click="ModsNotifyLaterBtn_Click">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                                        <TextBlock Text="Позже" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
 
             <!-- UPDATE MODAL OVERLAY -->
             <Grid x:Name="UpdateOverlay" Background="#B0000000" Visibility="Collapsed">
@@ -401,7 +516,9 @@
                         <DropShadowEffect Color="#6C5CE7" BlurRadius="40" Opacity="0.4" ShadowDepth="0"/>
                     </Border.Effect>
                     <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="🔄" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <Border Background="{StaticResource PurpleDimBrush}" BorderBrush="#406C5CE7" BorderThickness="1" CornerRadius="20" Width="44" Height="44" HorizontalAlignment="Center" Margin="0,0,0,10">
+                            <Path Data="{StaticResource IconRefreshGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                         <TextBlock x:Name="UpdateTitle" Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
                         <TextBlock x:Name="UpdateVersionText" Text="v2.1.22" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
                         <TextBlock x:Name="UpdateDesc" Text="Нажмите «Скачать», чтобы получить новую версию" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
@@ -427,7 +544,10 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                            <TextBlock x:Name="btnTxt" Text="📥 Скачать" FontSize="12" FontWeight="Bold" Foreground="#0A0A0A"/>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Path Data="{StaticResource IconDownloadGeometry}" Stroke="#0A0A0A" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="btnTxt" Text="Скачать" FontSize="12" FontWeight="Bold" Foreground="#0A0A0A" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </Border>
                                     </ControlTemplate>
                                 </Button.Template>
@@ -436,7 +556,10 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="{StaticResource PurpleGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                            <TextBlock Text="🔄 Установить" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Path Data="{StaticResource IconRefreshGeometry}" Stroke="#FFFFFF" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Установить" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </Border>
                                     </ControlTemplate>
                                 </Button.Template>
@@ -445,7 +568,10 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="Transparent" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                            <TextBlock Text="🌐 Вручную" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Path Data="{StaticResource IconGlobeGeometry}" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Вручную" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </Border>
                                     </ControlTemplate>
                                 </Button.Template>

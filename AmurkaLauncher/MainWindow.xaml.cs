@@ -3,8 +3,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using AmurkaLauncher.Controls;
 using AmurkaLauncher.Models;
 using AmurkaLauncher.Services;
 using Microsoft.Win32;
@@ -68,6 +70,30 @@ public partial class MainWindow : Window
             _toastTimer.Stop();
             ToastBorder.Visibility = Visibility.Collapsed;
         };
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var source = (HwndSource?)PresentationSource.FromVisual(this);
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == App.WmShowLauncher)
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+            Activate();
+            Topmost = true;
+            Topmost = false;
+            Focus();
+            handled = true;
+        }
+        return IntPtr.Zero;
     }
 
     private async void OnUpdateCheckTimerTick(object? sender, EventArgs e)
@@ -209,7 +235,6 @@ public partial class MainWindow : Window
 
             UpdateCounts();
             RefreshNotifyBanner();
-            SetStatus($"Доступно модов: {_availableMods.Count}");
             return true;
         }
         catch (Exception ex)
@@ -231,29 +256,44 @@ public partial class MainWindow : Window
     private void UpdateCounts()
     {
         AvailableCountText.Text = _availableMods.Count.ToString();
-        InstalledCountText.Text = _installedMods.Count.ToString();
+        int installedCount = _availableMods.Count(m => m.IsInstalled);
+        InstalledCountText.Text = installedCount.ToString();
     }
 
     private void RefreshNotifyBanner()
     {
         if (_availableMods.Count == 0) return;
 
-        var installedSet = new HashSet<string>(_installedMods, StringComparer.OrdinalIgnoreCase);
-        _notifyMods = _availableMods.Where(m => !m.IsInstalled || !installedSet.Contains(m.Name)).ToList();
-        int obsoleteCount = _obsoleteMods.Count;
+        var missingOrOutdated = _availableMods.Where(m => !m.IsInstalled).ToList();
+        var untracked = _modManagerService.FindUntrackedOrObsoleteFiles(_availableMods, _config.ModsPath);
+        int extraCount = _obsoleteMods.Count + untracked.Count;
 
-        if (_notifyMods.Count == 0 && obsoleteCount == 0)
+        if (missingOrOutdated.Count == 0 && extraCount == 0)
         {
             ModsNotifyBanner.Visibility = Visibility.Collapsed;
+            SetStatus("Моды синхронизированы с сервером", ok: true);
             return;
         }
 
-        var parts = new List<string>();
-        if (_notifyMods.Count > 0) parts.Add($"Новых/обновленных: {_notifyMods.Count}");
-        if (obsoleteCount > 0) parts.Add($"Устаревших: {obsoleteCount}");
+        if (missingOrOutdated.Count > 0 && extraCount > 0)
+        {
+            ModsNotifyTitle.Text = "Требуется синхронизация модификаций";
+            ModsNotifyDesc.Text = $"Скачать с сервера: {missingOrOutdated.Count} · Удалить сторонних: {extraCount}";
+            SetStatus($"Требуется синхронизация ({missingOrOutdated.Count} из {_availableMods.Count})", ok: false);
+        }
+        else if (missingOrOutdated.Count > 0)
+        {
+            ModsNotifyTitle.Text = "Доступны обновления модификаций";
+            ModsNotifyDesc.Text = $"Необходимо скачать: {missingOrOutdated.Count} из {_availableMods.Count} модов";
+            SetStatus($"Требуется скачать: {missingOrOutdated.Count} из {_availableMods.Count}", ok: false);
+        }
+        else
+        {
+            ModsNotifyTitle.Text = "Обнаружены сторонние файлы";
+            ModsNotifyDesc.Text = $"В папке найдено {extraCount} файлов не из репозитория GitHub";
+            SetStatus($"Лишних файлов в папке: {extraCount}", ok: false);
+        }
 
-        ModsNotifyTitle.Text = $"Нужна синхронизация: {_notifyMods.Count + obsoleteCount}";
-        ModsNotifyDesc.Text = string.Join(" · ", parts);
         ModsNotifyBanner.Visibility = Visibility.Visible;
     }
 
@@ -278,15 +318,33 @@ public partial class MainWindow : Window
     {
         if (_isDownloading || _isLoadingMods) return;
 
-        if (toDownload.Count == 0)
-        {
-            ShowToast("Нет модов для скачивания", isError: true);
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(_config.ModsPath))
         {
             ShowToast("Укажите папку модов", isError: true);
+            return;
+        }
+
+        if (IsGameRunning())
+        {
+            AmurkaMessageBox.Show(
+                "Игра SCUM сейчас запущена!\n\nСинхронизация модификаций невозможна во время работы игры, так как файлы игры заблокированы процессом SCUM.exe.\nПожалуйста, закройте игру SCUM и повторите попытку.",
+                "Игра запущена",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Warning,
+                this);
+            ShowToast("Закройте SCUM перед синхронизацией модов", isError: true);
+            return;
+        }
+
+        await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
+        var missingOrCorrupt = _availableMods.Where(m => !m.IsInstalled).ToList();
+        var untracked = _modManagerService.FindUntrackedOrObsoleteFiles(_availableMods, _config.ModsPath);
+
+        if (missingOrCorrupt.Count == 0 && untracked.Count == 0)
+        {
+            ShowToast("Моды полностью синхронизированы с GitHub");
+            SetStatus("Моды полностью синхронизированы с GitHub");
+            RefreshNotifyBanner();
             return;
         }
 
@@ -298,27 +356,38 @@ public partial class MainWindow : Window
         ModsNotifyDownloadBtn.IsEnabled = false;
         ProgressSection.Visibility = Visibility.Visible;
 
+        int success = 0;
+        int errors = 0;
+        int removed = 0;
+
         try
         {
-            if (IsGameRunning())
-                throw new InvalidOperationException("Закройте SCUM перед обновлением модов.");
-            var (success, errors) = await _modManagerService.DownloadAllModsAsync(
-                toDownload,
-                _config.ModsPath,
-                (percent, file, downloaded, total) =>
-                {
-                    Dispatcher.BeginInvoke(() =>
+            if (missingOrCorrupt.Count > 0)
+            {
+                var downloadResult = await _modManagerService.DownloadAllModsAsync(
+                    missingOrCorrupt,
+                    _config.ModsPath,
+                    (percent, file, downloaded, total) =>
                     {
-                        DownloadProgressBar.Value = percent;
-                        string sizeStr = total > 0 ? $"{FormatSize(downloaded)} / {FormatSize(total)}" : $"{percent}%";
-                        ProgressLabel.Text = $"{file} — {sizeStr}";
-                        SetStatus($"📥 {file} ({percent}%)");
+                        Dispatcher.BeginInvoke(() =>
+                        {
+                            DownloadProgressBar.Value = percent;
+                            string sizeStr = total > 0 ? $"{FormatSize(downloaded)} / {FormatSize(total)}" : $"{percent}%";
+                            ProgressLabel.Text = $"{file} — {sizeStr}";
+                            SetStatus($"Загрузка: {file} ({percent}%)");
+                        });
                     });
-                });
+                success = downloadResult.success;
+                errors = downloadResult.errors;
+            }
 
             if (errors == 0)
-                await _modManagerService.RemoveObsoleteModsAsync(_availableMods, _config.ModsPath);
+            {
+                removed = await _modManagerService.RemoveObsoleteAndUntrackedModsAsync(_availableMods, _config.ModsPath);
+            }
+
             await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
+            _modManagerService.RecordVerifiedInstalledMods(_availableMods, _config.ModsPath);
             _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
 
             _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
@@ -330,15 +399,25 @@ public partial class MainWindow : Window
                 ShowToast($"Не удалось обновить моды. Ошибок: {errors}. Повторите загрузку.", isError: true);
                 SetStatus("Обновление модов не завершено", false);
             }
+            else if (success > 0 && removed > 0)
+            {
+                ShowToast($"Синхронизация завершена: скачано {success}, удалено лишних {removed}");
+                SetStatus($"Синхронизировано (+{success}, -{removed})");
+            }
             else if (success > 0)
             {
-                ShowToast($"✅ Скачано: {success}, ошибок: {errors}");
+                ShowToast($"Синхронизация завершена: скачано {success}");
                 SetStatus($"Скачано модов: {success}");
+            }
+            else if (removed > 0)
+            {
+                ShowToast($"Папка очищена: удалено лишних файлов: {removed}");
+                SetStatus($"Удалено лишних файлов: {removed}");
             }
             else
             {
-                ShowToast("Все моды уже установлены");
-                SetStatus("Все моды уже установлены");
+                ShowToast("Моды полностью синхронизированы с GitHub");
+                SetStatus("Моды полностью синхронизированы с GitHub");
             }
         }
         catch (Exception ex)
@@ -376,10 +455,16 @@ public partial class MainWindow : Window
 
     private static bool IsGameRunning()
     {
+        string[] names = ["SCUM", "SCUM-Win64-Shipping", "SCUM_Launcher"];
         var processes = Process.GetProcesses();
-        try { return processes.Any(p => p.ProcessName.Equals("SCUM", StringComparison.OrdinalIgnoreCase) ||
-            p.ProcessName.StartsWith("SCUM-Win64-Shipping", StringComparison.OrdinalIgnoreCase)); }
-        finally { foreach (var process in processes) process.Dispose(); }
+        try
+        {
+            return processes.Any(p => names.Any(n => p.ProcessName.Equals(n, StringComparison.OrdinalIgnoreCase)));
+        }
+        finally
+        {
+            foreach (var process in processes) process.Dispose();
+        }
     }
 
     private void SetModControlsEnabled(bool enabled)
@@ -396,7 +481,32 @@ public partial class MainWindow : Window
     {
         if (e.ChangedButton == MouseButton.Left)
         {
-            DragMove();
+            if (e.ClickCount == 2)
+            {
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            }
+            else
+            {
+                DragMove();
+            }
+        }
+    }
+
+    private void Window_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            if (MaximizeIconPath != null)
+                MaximizeIconPath.Data = (Geometry)FindResource("IconWinRestoreGeometry");
+            if (MaximizeBtn != null)
+                MaximizeBtn.ToolTip = "Восстановить";
+        }
+        else
+        {
+            if (MaximizeIconPath != null)
+                MaximizeIconPath.Data = (Geometry)FindResource("IconWinMaximizeGeometry");
+            if (MaximizeBtn != null)
+                MaximizeBtn.ToolTip = "Развернуть";
         }
     }
 
@@ -413,6 +523,135 @@ public partial class MainWindow : Window
     {
         Clipboard.SetText(ServerIp);
         ShowToast($"IP скопирован: {ServerIp}");
+    }
+
+    private async void WipeClientBtn_Click(object sender, RoutedEventArgs e)
+    {
+        bool confirm = AmurkaMessageBox.Show(
+            "Полная очистка данных и кэша SCUM\n\n" +
+            "• Процессы игры SCUM будут принудительно завершены (если запущены).\n" +
+            "• Будет полностью удалена папка кэша и настроек:\n" +
+            "   %LOCALAPPDATA%\\SCUM\n" +
+            "• Это устраняет вылеты, сбои шейдеров и ошибки синхронизации серверов.\n" +
+            "• При следующем запуске игра автоматически создаст чистые файлы.\n\n" +
+            "Выполнить очистку прямо сейчас?",
+            "Очистка клиента SCUM",
+            AmurkaDialogButtons.YesNo,
+            AmurkaDialogIcon.Warning,
+            owner: this,
+            confirmText: "Да, очистить",
+            cancelText: "Отмена",
+            isDanger: true
+        ) == true;
+
+        if (!confirm) return;
+
+        WipeClientBtn.IsEnabled = false;
+        SetStatus("Очистка клиента SCUM...");
+        ShowToast("Выполняется очистка клиента...");
+
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                // 1. Принудительное закрытие всех процессов SCUM
+                string[] procNames = ["SCUM", "SCUM-Win64-Shipping", "SCUM_Launcher"];
+                foreach (var proc in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (procNames.Any(n => n.Equals(proc.ProcessName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            proc.Kill(entireProcessTree: true);
+                            proc.WaitForExit(3000);
+                        }
+                    }
+                    catch { }
+                    finally { proc.Dispose(); }
+                }
+
+                // 2. Очистка %LOCALAPPDATA%\SCUM
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string scumDir = Path.Combine(localAppData, "SCUM");
+
+                if (!Directory.Exists(scumDir))
+                {
+                    return (success: true, wasEmpty: true, error: (string?)null);
+                }
+
+                try
+                {
+                    var dirInfo = new DirectoryInfo(scumDir);
+                    foreach (var file in dirInfo.GetFiles("*", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            file.Attributes = FileAttributes.Normal;
+                            file.Delete();
+                        }
+                        catch { }
+                    }
+
+                    foreach (var subDir in dirInfo.GetDirectories("*", SearchOption.AllDirectories).OrderByDescending(d => d.FullName.Length))
+                    {
+                        try { subDir.Delete(true); } catch { }
+                    }
+
+                    dirInfo.Delete(true);
+                    return (success: !Directory.Exists(scumDir), wasEmpty: false, error: (string?)null);
+                }
+                catch (Exception ex)
+                {
+                    bool stillExists = Directory.Exists(scumDir);
+                    return (success: !stillExists, wasEmpty: false, error: stillExists ? ex.Message : null);
+                }
+            });
+
+            if (result.success)
+            {
+                string successMsg = result.wasEmpty
+                    ? "Папка клиента SCUM уже была чиста!\n\nВременные файлы и кэш отсутствуют."
+                    : "Очистка клиента SCUM успешно завершена!\n\nПапка %LOCALAPPDATA%\\SCUM полностью удалена.\nПри следующем входе игра создаст новые чистые файлы конфигурации.";
+
+                AmurkaMessageBox.Show(
+                    successMsg,
+                    "Очистка завершена",
+                    AmurkaDialogButtons.Ok,
+                    AmurkaDialogIcon.Success,
+                    owner: this);
+
+                ShowToast("Клиент SCUM успешно очищен!");
+                SetStatus("Клиент SCUM успешно очищен");
+            }
+            else
+            {
+                AmurkaMessageBox.Show(
+                    "Часть файлов была удалена, однако некоторые файлы заблокированы Windows или другим процессом.\n\nРекомендуется перезагрузить ПК перед следующим запуском игры.",
+                    "Внимание",
+                    AmurkaDialogButtons.Ok,
+                    AmurkaDialogIcon.Warning,
+                    owner: this);
+
+                ShowToast("Часть файлов заблокирована системой", isError: true);
+                SetStatus("Очистка завершена с предупреждением", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AmurkaMessageBox.Show(
+                $"Ошибка при выполнении очистки:\n{ex.Message}",
+                "Ошибка",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Error,
+                owner: this);
+
+            ShowToast($"Ошибка очистки: {ex.Message}", isError: true);
+            SetStatus("Ошибка очистки", false);
+        }
+        finally
+        {
+            WipeClientBtn.IsEnabled = true;
+        }
     }
 
     private async Task PingVerificationAsync()
@@ -433,12 +672,51 @@ public partial class MainWindow : Window
     private async void LaunchBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_isDownloading || _isLoadingMods) return;
-        if (!await LoadModsAsync()) return;
-        if (ModsNotifyBanner.Visibility == Visibility.Visible)
+
+        if (IsGameRunning())
         {
-            ShowToast("Обновите выбранные моды перед запуском SCUM", isError: true);
+            AmurkaMessageBox.Show(
+                "Игра SCUM уже запущена на вашем компьютере!\n\nПереключитесь на уже открытое окно игры.",
+                "Игра уже запущена",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Info,
+                this);
             return;
         }
+
+        if (!await LoadModsAsync()) return;
+
+        // Полная проверка синхронизации модов перед запуском игры
+        if (_availableMods.Count > 0)
+        {
+            var (isSynced, missingOrCorrupt, obsoleteFiles) = await _modManagerService.CheckSynchronizationAsync(_availableMods, _config.ModsPath);
+            if (!isSynced)
+            {
+                var reasons = new List<string>();
+                if (missingOrCorrupt.Count > 0)
+                    reasons.Add($"Необходимо скачать или обновить: {missingOrCorrupt.Count} модов");
+                if (obsoleteFiles.Count > 0)
+                    reasons.Add($"Обнаружено устаревших/лишних файлов: {obsoleteFiles.Count}");
+
+                string reasonText = string.Join("\n• ", reasons);
+
+                bool? syncNow = AmurkaMessageBox.Show(
+                    $"Внимание: обнаружен рассинхрон модификаций с сервером!\n\n• {reasonText}\n\nПеред подключением к серверу необходимо иметь 100% синхронизированный набор модов.\n\nВыполнить синхронизацию прямо сейчас?",
+                    "Требуется синхронизация",
+                    AmurkaDialogButtons.YesNo,
+                    AmurkaDialogIcon.Warning,
+                    this,
+                    confirmText: "Синхронизировать",
+                    cancelText: "Позже");
+
+                if (syncNow == true)
+                {
+                    await DownloadModsListAsync(_availableMods);
+                }
+                return;
+            }
+        }
+
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
         if (exe == null)
         {
@@ -448,7 +726,7 @@ public partial class MainWindow : Window
 
         try
         {
-            SetStatus("🚀 Запуск SCUM...");
+            SetStatus("Запуск SCUM...");
 
             // Фоновый пинг верификации лаунчера на сервер SSM (WebPanel локальный и боевой)
             try
@@ -461,7 +739,7 @@ public partial class MainWindow : Window
             catch { }
 
             _gameLauncherService.LaunchGame(exe, _config.LaunchMode);
-            SetStatus($"🚀 Запуск SCUM ({_config.LaunchMode.ToUpper()})...");
+            SetStatus($"Запуск SCUM ({_config.LaunchMode.ToUpper()})...");
             ShowToast("SCUM запущен!");
         }
         catch (Exception ex)
@@ -474,37 +752,75 @@ public partial class MainWindow : Window
     private async void DownloadBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_isDownloading || _isLoadingMods) return;
+
+        if (IsGameRunning())
+        {
+            AmurkaMessageBox.Show(
+                "Игра SCUM сейчас запущена!\n\nСкачивание и обновление модификаций невозможно во время работы игры, так как файлы игры заблокированы.\nПожалуйста, закройте игру SCUM и повторите попытку.",
+                "Игра запущена",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Warning,
+                this);
+            ShowToast("Закройте SCUM перед скачиванием модов", isError: true);
+            return;
+        }
+
         if (!await LoadModsAsync()) return;
         await DownloadModsListAsync(_availableMods);
     }
 
-    private void DeleteBtn_Click(object sender, RoutedEventArgs e)
+    private async void DeleteBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_isDownloading || _isLoadingMods) return;
-        _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
-        if (_installedMods.Count == 0)
+
+        if (IsGameRunning())
         {
-            ShowToast("Моды не установлены");
+            AmurkaMessageBox.Show(
+                "Игра SCUM сейчас запущена!\n\nУдаление модификаций невозможно во время работы игры, так как файлы заблокированы процессом SCUM.exe.\nПожалуйста, закройте SCUM и повторите попытку.",
+                "Игра запущена",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Warning,
+                this);
+            ShowToast("Закройте SCUM перед удалением модов", isError: true);
             return;
         }
 
-        var result = MessageBox.Show(
-            $"Удалить все {_installedMods.Count} модов из папки ~mods?",
-            "Подтверждение удаления",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+        var filesOnDisk = Directory.Exists(_config.ModsPath)
+            ? Directory.EnumerateFiles(_config.ModsPath, "*.*", SearchOption.TopDirectoryOnly).ToList()
+            : [];
+        if (filesOnDisk.Count == 0 && !_availableMods.Any(m => m.IsInstalled))
+        {
+            ShowToast("Папка модов уже пуста");
+            return;
+        }
 
-        if (result != MessageBoxResult.Yes) return;
+        int deleteTargetCount = filesOnDisk.Count > 0 ? filesOnDisk.Count : _availableMods.Count(m => m.IsInstalled);
+
+        bool? confirmed = AmurkaMessageBox.Show(
+            $"Вы действительно хотите удалить все файлы ({deleteTargetCount}) из папки ~mods?\n\nЭто действие полностью очистит каталог модификаций.",
+            "Подтверждение удаления",
+            AmurkaDialogButtons.YesNo,
+            AmurkaDialogIcon.Question,
+            this,
+            confirmText: "Удалить",
+            cancelText: "Отмена",
+            isDanger: true);
+
+        if (confirmed != true) return;
 
         try
         {
             int removed = _modManagerService.DeleteAllMods(_config.ModsPath);
+            foreach (var mod in _availableMods) mod.IsInstalled = false;
+            await _modManagerService.RefreshInstalledStateAsync(_availableMods, _config.ModsPath);
+            _obsoleteMods = await _modManagerService.FindObsoleteModsAsync(_availableMods, _config.ModsPath);
             _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
+
             UpdateCounts();
             RefreshNotifyBanner();
 
-            ShowToast($"✅ Удалено модов: {removed}");
-            SetStatus($"Удалено модов: {removed}");
+            ShowToast($"Удалено файлов: {removed}");
+            SetStatus($"Удалено файлов: {removed}");
         }
         catch (Exception ex)
         {
@@ -610,6 +926,19 @@ public partial class MainWindow : Window
     private async void ModsNotifyDownloadBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_isDownloading || _isLoadingMods) return;
+
+        if (IsGameRunning())
+        {
+            AmurkaMessageBox.Show(
+                "Игра SCUM сейчас запущена!\n\nСкачивание и обновление модификаций невозможно во время работы игры, так как файлы игры заблокированы.\nПожалуйста, закройте игру SCUM и повторите попытку.",
+                "Игра запущена",
+                AmurkaDialogButtons.Ok,
+                AmurkaDialogIcon.Warning,
+                this);
+            ShowToast("Закройте SCUM перед скачиванием модов", isError: true);
+            return;
+        }
+
         if (!await LoadModsAsync()) return;
         await DownloadModsListAsync(_availableMods);
     }

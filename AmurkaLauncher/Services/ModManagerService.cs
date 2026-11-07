@@ -307,9 +307,99 @@ public class ModManagerService
             state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
         WriteState(modsPath, state);
     }
+    public List<string> FindUntrackedOrObsoleteFiles(List<ModItem> catalog, string modsPath)
+    {
+        if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath)) return [];
+        var allowedNames = catalog.Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            return Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => !Path.GetFileName(f).Equals(StateFile, StringComparison.OrdinalIgnoreCase) &&
+                            !Path.GetFileName(f).EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+                .Select(Path.GetFileName)
+                .Where(f => !string.IsNullOrEmpty(f) && !allowedNames.Contains(f))
+                .Select(f => f!)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public async Task<int> RemoveObsoleteAndUntrackedModsAsync(List<ModItem> catalog, string modsPath)
+    {
+        ValidateModsPath(modsPath);
+        if (!Directory.Exists(modsPath)) return 0;
+
+        int removed = 0;
+        var allowedNames = catalog.Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var files = Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => !Path.GetFileName(f).Equals(StateFile, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var file in files)
+            {
+                string name = Path.GetFileName(file);
+                if (!allowedNames.Contains(name))
+                {
+                    try
+                    {
+                        File.Delete(file);
+                        removed++;
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            var state = ReadState(modsPath);
+            bool stateChanged = false;
+            foreach (var key in state.Keys.ToList())
+            {
+                if (!allowedNames.Contains(key))
+                {
+                    state.Remove(key);
+                    stateChanged = true;
+                }
+            }
+            if (stateChanged)
+            {
+                WriteState(modsPath, state);
+            }
+        }
+        catch { }
+
+        return removed;
+    }
+
+    public async Task<(bool isSynced, List<ModItem> missingOrCorrupt, List<string> obsoleteFiles)> CheckSynchronizationAsync(
+        List<ModItem> catalog,
+        string modsPath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath))
+        {
+            return (false, catalog, []);
+        }
+
+        await RefreshInstalledStateAsync(catalog, modsPath, ct);
+        var missingOrCorrupt = catalog.Where(m => !m.IsInstalled).ToList();
+        var obsoleteFiles = FindUntrackedOrObsoleteFiles(catalog, modsPath);
+
+        bool isSynced = missingOrCorrupt.Count == 0 && obsoleteFiles.Count == 0;
+        return (isSynced, missingOrCorrupt, obsoleteFiles);
+    }
+
     public Task RemoveObsoleteModsAsync(List<ModItem> catalog, string modsPath)
     {
-        return RemoveObsoleteModsAsync(catalog, new[] { "core", "speed", "skins", "weapons", "buildings", "music" }, modsPath);
+        return RemoveObsoleteAndUntrackedModsAsync(catalog, modsPath);
     }
 
     public async Task RemoveObsoleteModsAsync(List<ModItem> catalog, IEnumerable<string> selectedCategories, string modsPath)
@@ -360,18 +450,14 @@ public class ModManagerService
         int removed = 0;
         foreach (var file in Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly))
         {
-            if (file.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
-                file.EndsWith(".sig", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                try
-                {
-                    File.Delete(file);
-                    removed++;
-                }
-                catch
-                {
-                    // Ignore if in use
-                }
+                File.Delete(file);
+                removed++;
+            }
+            catch
+            {
+                // Ignore if in use
             }
         }
 

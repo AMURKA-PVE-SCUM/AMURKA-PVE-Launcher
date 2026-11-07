@@ -1,0 +1,130 @@
+<Application x:Class="AmurkaInstaller.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Colors -->
+        <Color x:Key="BgColor">#0A0A0A</Color>
+        <Color x:Key="AccentColor">#00FF88</Color>
+        <Color x:Key="Accent2Color">#00CC6A</Color>
+        <Color x:Key="PurpleColor">#6C5CE7</Color>
+        <Color x:Key="DangerColor">#FF4757</Color>
+
+        <!-- Brushes -->
+        <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+        <SolidColorBrush x:Key="CardBgBrush" Color="#0D1117"/>
+        <SolidColorBrush x:Key="CardBorderBrush" Color="#20FFFFFF"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+        <SolidColorBrush x:Key="AccentDimBrush" Color="#2200FF88"/>
+        <SolidColorBrush x:Key="PurpleBrush" Color="{StaticResource PurpleColor}"/>
+        <SolidColorBrush x:Key="PurpleDimBrush" Color="#266C5CE7"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#80FFFFFF"/>
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#50FFFFFF"/>
+
+        <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#00FF88" Offset="0"/>
+            <GradientStop Color="#00CC6A" Offset="1"/>
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="PurpleGradientBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#6C5CE7" Offset="0"/>
+            <GradientStop Color="#8B7CF7" Offset="1"/>
+        </LinearGradientBrush>
+
+        <!-- Vector Icon Geometries -->
+        <StreamGeometry x:Key="IconWinMinimizeGeometry">M0 5h10</StreamGeometry>
+        <StreamGeometry x:Key="IconWinCloseGeometry">M0.5 0.5l9 9 M9.5 0.5l-9 9</StreamGeometry>
+        <StreamGeometry x:Key="IconFolderOpenGeometry">M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v1H2V6zm0 5h20l-2 9H4l-2-9z</StreamGeometry>
+        <StreamGeometry x:Key="IconPlayGeometry">M5 4.5V19.5C5 20.27 5.84 20.75 6.5 20.35L18.5 12.85C19.17 12.45 19.17 11.55 18.5 11.15L6.5 3.65C5.84 3.25 5 3.73 5 4.5Z</StreamGeometry>
+        <StreamGeometry x:Key="IconCheckGeometry">M20 6L9 17l-5-5</StreamGeometry>
+        <StreamGeometry x:Key="IconSparklesGeometry">M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z M19 16l1.2 2.8L23 20l-2.8 1.2L19 24l-1.2-2.8L15 20l2.8-1.2z</StreamGeometry>
+
+        <!-- TitleBar Buttons -->
+        <Style x:Key="TitleBarBtnStyle" TargetType="Button">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1AFFFFFF"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#2500FF88"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TitleBarCloseBtnStyle" TargetType="Button" BasedOn="{StaticResource TitleBarBtnStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource DangerBrush}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#FF6B81"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom CheckBox Style -->
+        <Style x:Key="CyberCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="box" Width="18" Height="18" Background="#20FFFFFF" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="4" Margin="0,0,8,0">
+                                <Path x:Name="check" Data="{StaticResource IconCheckGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" Stretch="Uniform" Width="10" Height="10" Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{StaticResource AccentDimBrush}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="check" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
+</Application>

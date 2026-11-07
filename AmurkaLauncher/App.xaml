@@ -39,25 +39,56 @@
             <GradientStop Color="#8B7CF7" Offset="1"/>
         </LinearGradientBrush>
 
-        <!-- TitleBar Buttons -->
+        <!-- Vector Icon Geometries (Lucide Icons) -->
+        <StreamGeometry x:Key="IconPlayGeometry">M5 4.5V19.5C5 20.27 5.84 20.75 6.5 20.35L18.5 12.85C19.17 12.45 19.17 11.55 18.5 11.15L6.5 3.65C5.84 3.25 5 3.73 5 4.5Z</StreamGeometry>
+        <StreamGeometry x:Key="IconRefreshGeometry">M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16</StreamGeometry>
+        <StreamGeometry x:Key="IconDownloadGeometry">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3</StreamGeometry>
+        <StreamGeometry x:Key="IconTrashGeometry">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</StreamGeometry>
+        <StreamGeometry x:Key="IconCopyGeometry">M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z</StreamGeometry>
+        <StreamGeometry x:Key="IconFolderOpenGeometry">M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v1H2V6zm0 5h20l-2 9H4l-2-9z</StreamGeometry>
+        <StreamGeometry x:Key="IconFlameGeometry">M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 3.5z</StreamGeometry>
+        <StreamGeometry x:Key="IconShoppingBagGeometry">M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z M3 6h18 M16 10a4 4 0 0 1-8 0</StreamGeometry>
+        <StreamGeometry x:Key="IconGlobeGeometry">M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 0c2.5 2.7 4 6.2 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.2-4-10s1.5-7.3 4-10z M2 12h20</StreamGeometry>
+        <StreamGeometry x:Key="IconMessagesGeometry">M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z</StreamGeometry>
+        <StreamGeometry x:Key="IconSparklesGeometry">M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z M19 16l1.2 2.8L23 20l-2.8 1.2L19 24l-1.2-2.8L15 20l2.8-1.2z</StreamGeometry>
+        <StreamGeometry x:Key="IconServerGeometry">M2 4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z M2 14a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z M6 6h.01 M6 16h.01</StreamGeometry>
+
+        <!-- Window TitleBar Control Buttons (Lucide / Tailwind Styled) -->
+        <StreamGeometry x:Key="IconWinMinimizeGeometry">M0 5h10</StreamGeometry>
+        <StreamGeometry x:Key="IconWinMaximizeGeometry">M0.5 0.5h9v9h-9z</StreamGeometry>
+        <StreamGeometry x:Key="IconWinRestoreGeometry">M2.5 0.5h7v7h-2 M0.5 2.5h7v7h-7z</StreamGeometry>
+        <StreamGeometry x:Key="IconWinCloseGeometry">M0.5 0.5l9 9 M9.5 0.5l-9 9</StreamGeometry>
+
+        <!-- TitleBar Buttons (Tailwind Dark Cyberpunk) -->
         <Style x:Key="TitleBarBtnStyle" TargetType="Button">
             <Setter Property="Width" Value="34"/>
-            <Setter Property="Height" Value="26"/>
+            <Setter Property="Height" Value="28"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#22FFFFFF"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="border" Property="Background" Value="#1AFFFFFF"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#2500FF88"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2000FF88"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#4000FF88"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -69,13 +100,22 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="{StaticResource DangerBrush}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#FF6B81"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#D63031"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#D63031"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -89,8 +129,8 @@
             <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">

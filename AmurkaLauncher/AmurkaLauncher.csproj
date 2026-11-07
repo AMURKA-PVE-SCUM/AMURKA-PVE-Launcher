@@ -3,13 +3,14 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
     <AssemblyName>AMURKA PVE Launcher</AssemblyName>
     <RootNamespace>AmurkaLauncher</RootNamespace>
-    <Version>2.1.25</Version>
+    <Version>2.1.26</Version>
     <Authors>DOMO</Authors>
     <Company>AMURKA PVE</Company>
     <Product>AMURKA PVE Launcher</Product>
@@ -18,6 +19,7 @@
   <ItemGroup>
     <Resource Include="Resources\icon.ico" />
   </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
