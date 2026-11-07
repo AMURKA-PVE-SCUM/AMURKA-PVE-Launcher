@@ -11,7 +11,7 @@ namespace AmurkaInstaller;
 
 public partial class MainWindow : Window
 {
-    private const string AppVersion = "2.1.26";
+    private const string AppVersion = "2.1.27";
     private readonly bool _isUpdate;
     private readonly bool _isUninstall;
     private string _targetDir = string.Empty;

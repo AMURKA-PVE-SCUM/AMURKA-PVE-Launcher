@@ -174,11 +174,62 @@ try
     var newUpdateHandler = new FakeHandler(request =>
     {
         Check(request.RequestUri!.Host != "api.github.com", "available update is found without GitHub API");
-        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.26\",\"file\":\"AMURKA-PVE-Launcher-Setup-2.1.26.exe\",\"size\":100}") };
+        return new(HttpStatusCode.OK) { Content = new StringContent("{\"version\":\"2.1.27\",\"file\":\"AMURKA-PVE-Launcher-Setup-2.1.27.exe\",\"size\":100}") };
     });
     var newUpdateClient = new HttpClient(newUpdateHandler);
-    Check((await new UpdateService(newUpdateClient, newUpdateClient).CheckForUpdateAsync())?.Version == "2.1.26" && newUpdateHandler.Count == 1,
+    Check((await new UpdateService(newUpdateClient, newUpdateClient).CheckForUpdateAsync())?.Version == "2.1.27" && newUpdateHandler.Count == 1,
         "new static launcher metadata supplies an update without API requests");
+
+    // Test UpdateService.DownloadUpdateAsync with Resume and SHA512
+    byte[] updatePayload = Encoding.UTF8.GetBytes("launcher-setup-executable-payload-binary-data-1234567890");
+    string updateSha512 = Convert.ToHexString(SHA512.HashData(updatePayload));
+    string updateTestDir = Path.Combine(root, "update-tests");
+    Directory.CreateDirectory(updateTestDir);
+
+    var updateInfo = new UpdateInfo
+    {
+        Version = "2.1.27",
+        File = "Setup.exe",
+        DownloadUrl = "https://test-updates/Setup.exe",
+        Size = updatePayload.Length,
+        Sha512 = updateSha512
+    };
+
+    // 1. Initial partial download (simulate interruption after 10 bytes)
+    string tempFile = Path.Combine(updateTestDir, updateInfo.File + ".tmp");
+    await File.WriteAllBytesAsync(tempFile, updatePayload[..10]);
+
+    long requestedRangeFrom = -1;
+    var resumableHandler = new FakeHandler(request =>
+    {
+        if (request.Headers.Range != null)
+        {
+            requestedRangeFrom = request.Headers.Range.Ranges.First().From ?? 0;
+            var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(updatePayload[(int)requestedRangeFrom..])
+            };
+            response.Content.Headers.ContentRange = new ContentRangeHeaderValue(requestedRangeFrom, updatePayload.Length - 1, updatePayload.Length);
+            return response;
+        }
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(updatePayload) };
+    });
+
+    var updateDownloadService = new UpdateService(new HttpClient(resumableHandler))
+    {
+        UpdatesDirectory = updateTestDir
+    };
+
+    long lastProgressDownloaded = 0;
+    string downloadedPath = await updateDownloadService.DownloadUpdateAsync(updateInfo, (_, dl, _) => lastProgressDownloaded = dl);
+    Check(requestedRangeFrom == 10, "updater resumes download using HTTP Range header");
+    Check(File.Exists(downloadedPath) && (await File.ReadAllBytesAsync(downloadedPath)).SequenceEqual(updatePayload), "resumed installer matches full payload");
+    Check(lastProgressDownloaded == updatePayload.Length, "progress callback reported complete size");
+
+    // 2. Fast path: second call when file exists and matches sha512 returns immediately without network request
+    int handlerCountBefore = resumableHandler.Count;
+    string fastPath = await updateDownloadService.DownloadUpdateAsync(updateInfo, (_, _, _) => { });
+    Check(resumableHandler.Count == handlerCountBefore && fastPath == downloadedPath, "verified existing installer returns without network re-download");
 
     if (args.Contains("--live"))
     {

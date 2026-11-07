@@ -44,6 +44,9 @@ public partial class MainWindow : Window
 
     private bool _isDownloading;
     private bool _isLoadingMods;
+    private bool _isDownloadingUpdate;
+    private bool _updateDismissed;
+    private CancellationTokenSource? _updateCts;
     private DateTime _lastModCheck = DateTime.MinValue;
     private UpdateInfo? _currentUpdate;
     private string? _downloadedInstallerPath;
@@ -98,10 +101,11 @@ public partial class MainWindow : Window
 
     private async void OnUpdateCheckTimerTick(object? sender, EventArgs e)
     {
+        if (_isDownloadingUpdate) return;
         try
         {
             await CheckForUpdatesAsync();
-            if (!_isDownloading && !_isLoadingMods && DateTime.UtcNow - _lastModCheck > TimeSpan.FromMinutes(5))
+            if (!_isDownloading && !_isLoadingMods && !_isDownloadingUpdate && DateTime.UtcNow - _lastModCheck > TimeSpan.FromMinutes(5))
                 await LoadModsAsync();
         }
         catch (Exception ex)
@@ -162,6 +166,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        _updateCts?.Cancel();
+        _updateCts?.Dispose();
         _updateCheckTimer.Stop();
         _verificationTimer.Stop();
         _toastTimer.Stop();
@@ -950,23 +956,52 @@ public partial class MainWindow : Window
 
     // --- Update System Handlers ---
 
+    private void UpdateStatusDot_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_currentUpdate != null)
+        {
+            _updateDismissed = false;
+            UpdateOverlay.Visibility = Visibility.Visible;
+        }
+    }
+
     private async Task CheckForUpdatesAsync()
     {
+        if (_isDownloadingUpdate) return;
         try
         {
             var update = await _updateService.CheckForUpdateAsync();
+            if (_isDownloadingUpdate) return;
+
             if (update != null)
             {
                 _currentUpdate = update;
                 UpdateStatusDot.Fill = (Brush)FindResource("AccentBrush");
-                UpdateStatusDot.ToolTip = $"Доступно обновление v{update.Version}";
+                UpdateStatusDot.ToolTip = $"Доступно обновление v{update.Version}. Нажмите, чтобы открыть.";
 
                 UpdateVersionText.Text = $"v{update.Version}";
-                UpdateOverlay.Visibility = Visibility.Visible;
-                UpdateDownloadBtn.Visibility = Visibility.Visible;
-                UpdateInstallBtn.Visibility = Visibility.Collapsed;
-                UpdateManualBtn.Visibility = Visibility.Collapsed;
-                UpdateProgressPanel.Visibility = Visibility.Collapsed;
+
+                if (!string.IsNullOrEmpty(_downloadedInstallerPath) && File.Exists(_downloadedInstallerPath))
+                {
+                    UpdateDownloadBtn.Visibility = Visibility.Collapsed;
+                    UpdateInstallBtn.Visibility = Visibility.Visible;
+                    UpdateManualBtn.Visibility = Visibility.Collapsed;
+                    UpdateProgressPanel.Visibility = Visibility.Collapsed;
+                    UpdateTitle.Text = "Обновление готово к установке";
+                    UpdateDesc.Text = "Нажмите «Установить», чтобы применить обновление.";
+                    if (!_updateDismissed) UpdateOverlay.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    if (!_updateDismissed)
+                    {
+                        UpdateOverlay.Visibility = Visibility.Visible;
+                        UpdateDownloadBtn.Visibility = Visibility.Visible;
+                        UpdateInstallBtn.Visibility = Visibility.Collapsed;
+                        UpdateManualBtn.Visibility = Visibility.Collapsed;
+                        UpdateProgressPanel.Visibility = Visibility.Collapsed;
+                    }
+                }
             }
             else
             {
@@ -983,35 +1018,75 @@ public partial class MainWindow : Window
 
     private async void UpdateDownloadBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentUpdate == null) return;
+        if (_currentUpdate == null || _isDownloadingUpdate) return;
+
+        _isDownloadingUpdate = true;
+        _updateCheckTimer.Stop();
 
         UpdateDownloadBtn.IsEnabled = false;
+        UpdateDownloadBtn.Visibility = Visibility.Collapsed;
+        UpdateManualBtn.Visibility = Visibility.Collapsed;
         UpdateProgressPanel.Visibility = Visibility.Visible;
+        UpdateProgressBar.Value = 0;
+        UpdateProgressLabel.Text = "Подготовка к загрузке...";
+        UpdateTitle.Text = $"Загрузка обновления v{_currentUpdate.Version}";
+        UpdateDesc.Text = "Пожалуйста, подождите завершения загрузки...";
+
+        _updateCts?.Cancel();
+        _updateCts = new CancellationTokenSource();
 
         try
         {
-            _downloadedInstallerPath = await _updateService.DownloadUpdateAsync(_currentUpdate, pct =>
-            {
-                Dispatcher.BeginInvoke(() =>
+            _downloadedInstallerPath = await _updateService.DownloadUpdateAsync(
+                _currentUpdate,
+                (pct, downloaded, total) =>
                 {
-                    UpdateProgressBar.Value = pct;
-                    UpdateProgressLabel.Text = $"{pct}%";
-                });
-            });
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        UpdateProgressBar.Value = pct;
+                        if (total > 0)
+                        {
+                            double mbDl = downloaded / (1024.0 * 1024.0);
+                            double mbTot = total / (1024.0 * 1024.0);
+                            UpdateProgressLabel.Text = $"{pct}% ({mbDl:F1} МБ / {mbTot:F1} МБ)";
+                        }
+                        else
+                        {
+                            UpdateProgressLabel.Text = $"{pct}%";
+                        }
+                    });
+                },
+                _updateCts.Token
+            );
 
             UpdateDownloadBtn.Visibility = Visibility.Collapsed;
             UpdateInstallBtn.Visibility = Visibility.Visible;
             UpdateTitle.Text = "Обновление скачано";
-            UpdateDesc.Text = "Нажмите «Установить», чтобы применить обновление";
+            UpdateDesc.Text = "Нажмите «Установить», чтобы применить обновление.";
             UpdateProgressPanel.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateTitle.Text = "Загрузка отменена";
+            UpdateDesc.Text = "Вы можете повторить попытку в любое время.";
+            UpdateProgressPanel.Visibility = Visibility.Collapsed;
+            UpdateDownloadBtn.IsEnabled = true;
+            UpdateDownloadBtn.Visibility = Visibility.Visible;
+            UpdateManualBtn.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
             UpdateTitle.Text = "Ошибка загрузки";
-            UpdateDesc.Text = ex.Message;
+            UpdateDesc.Text = $"Не удалось скачать обновление ({ex.Message}). Вы можете попробовать снова или скачать установщик вручную.";
             UpdateProgressPanel.Visibility = Visibility.Collapsed;
             UpdateManualBtn.Visibility = Visibility.Visible;
             UpdateDownloadBtn.IsEnabled = true;
+            UpdateDownloadBtn.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            _isDownloadingUpdate = false;
+            _updateCheckTimer.Start();
         }
     }
 
@@ -1038,6 +1113,7 @@ public partial class MainWindow : Window
 
     private void UpdateLaterBtn_Click(object sender, RoutedEventArgs e)
     {
+        _updateDismissed = true;
         UpdateOverlay.Visibility = Visibility.Collapsed;
     }
 }

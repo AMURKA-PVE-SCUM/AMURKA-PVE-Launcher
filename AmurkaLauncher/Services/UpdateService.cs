@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AmurkaLauncher.Models;
@@ -17,11 +19,14 @@ public partial class UpdateService
     private const string GitHubRawLauncherJsonUrl = "https://raw.githubusercontent.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/main/dist/launcher.json";
     private const string GitHubReleasesDownloadBase = "https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/download";
 
-    // Единственные экземпляры HttpClient для устранения утечки сокетов (Socket Exhaustion)
+    // Единственный экземпляр HttpClient во избежание утечки сокетов (Socket Exhaustion)
     private static readonly HttpClient SharedHttpClient = CreateHttpClient(allowAutoRedirect: true, timeoutMinutes: 10);
     private static readonly HttpClient SharedRedirectClient = CreateHttpClient(allowAutoRedirect: false, timeoutSeconds: 10);
     private readonly HttpClient HttpClient;
     private readonly HttpClient RedirectClient;
+
+    public string? UpdatesDirectory { get; set; }
+    public string? VersionOverride { get; set; }
 
     public UpdateService(HttpClient? client = null, HttpClient? redirectClient = null)
     {
@@ -58,9 +63,19 @@ public partial class UpdateService
     {
         get
         {
+            if (!string.IsNullOrEmpty(VersionOverride)) return VersionOverride;
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.26";
+            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.27";
         }
+    }
+
+    public string GetUpdatesFolder()
+    {
+        return UpdatesDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "amurka-launcher",
+            "updates"
+        );
     }
 
     public async Task<UpdateInfo?> CheckForUpdateAsync()
@@ -94,7 +109,7 @@ public partial class UpdateService
             Debug.WriteLine($"[UpdateService] GitHub raw json check failed: {ex.Message}");
         }
 
-        // 2) Fallback: Редирект GitHub Releases (без API rate-limit и без утечки сокетов)
+        // 2) Fallback: редирект GitHub Releases (без API rate-limit и без утечки сокетов)
         try
         {
             using var resp = await RedirectClient.GetAsync(GitHubLatestRedirectUrl, HttpCompletionOption.ResponseHeadersRead);
@@ -189,53 +204,181 @@ public partial class UpdateService
         return null;
     }
 
-    public async Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int> onProgress, CancellationToken ct = default)
+    public Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int> onProgress, CancellationToken ct = default)
     {
-        string updatesFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "amurka-launcher",
-            "updates"
-        );
+        return DownloadUpdateAsync(updateInfo, (pct, _, _) => onProgress(pct), ct);
+    }
+
+    public async Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int, long, long> onProgress, CancellationToken ct = default)
+    {
+        string updatesFolder = GetUpdatesFolder();
         Directory.CreateDirectory(updatesFolder);
         string destPath = Path.Combine(updatesFolder, updateInfo.File);
+        string tempPath = destPath + ".tmp";
 
-        using var response = await HttpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
+        // Fast path: если файл уже скачан целиком, проверен по размеру и хэшу — возвращаем сразу
+        if (File.Exists(destPath))
+        {
+            var existingFi = new FileInfo(destPath);
+            if (updateInfo.Size <= 0 || existingFi.Length == updateInfo.Size)
+            {
+                if (string.IsNullOrWhiteSpace(updateInfo.Sha512) || VerifySha512(destPath, updateInfo.Sha512))
+                {
+                    long total = existingFi.Length;
+                    onProgress(100, total, total);
+                    return destPath;
+                }
+            }
+            try { File.Delete(destPath); } catch { }
+        }
 
-        long totalBytes = response.Content.Headers.ContentLength ?? updateInfo.Size;
-        await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-        await using var fileStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-
-        // Используем пул массивов для устранения выделения LOH/heap буферов
+        const int maxRetries = 4;
         const int bufferSize = 81920;
         byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-        long totalDownloaded = 0;
-        int lastReportedPercent = -1;
 
         try
         {
-            int bytesRead;
-            while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, bufferSize), ct)) > 0)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
-                totalDownloaded += bytesRead;
-                if (totalBytes > 0)
+                ct.ThrowIfCancellationRequested();
+
+                long existingLength = File.Exists(tempPath) ? new FileInfo(tempPath).Length : 0;
+                if (updateInfo.Size > 0 && existingLength > updateInfo.Size)
                 {
-                    int pct = (int)Math.Min(100, Math.Round((double)totalDownloaded / totalBytes * 100));
-                    if (pct != lastReportedPercent)
+                    try { File.Delete(tempPath); } catch { }
+                    existingLength = 0;
+                }
+                else if (updateInfo.Size > 0 && existingLength == updateInfo.Size)
+                {
+                    if (string.IsNullOrWhiteSpace(updateInfo.Sha512) || VerifySha512(tempPath, updateInfo.Sha512))
                     {
-                        lastReportedPercent = pct;
-                        onProgress(pct);
+                        File.Move(tempPath, destPath, overwrite: true);
+                        onProgress(100, updateInfo.Size, updateInfo.Size);
+                        return destPath;
                     }
+                    try { File.Delete(tempPath); } catch { }
+                    existingLength = 0;
+                }
+
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, updateInfo.DownloadUrl);
+                    if (existingLength > 0)
+                    {
+                        request.Headers.Range = new RangeHeaderValue(existingLength, null);
+                    }
+
+                    using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+                    if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+                    {
+                        try { File.Delete(tempPath); } catch { }
+                        existingLength = 0;
+                        continue;
+                    }
+
+                    response.EnsureSuccessStatusCode();
+
+                    bool isPartial = response.StatusCode == HttpStatusCode.PartialContent;
+                    long totalBytes;
+                    if (isPartial)
+                    {
+                        totalBytes = response.Content.Headers.ContentRange?.Length ?? updateInfo.Size;
+                    }
+                    else
+                    {
+                        totalBytes = response.Content.Headers.ContentLength ?? updateInfo.Size;
+                        existingLength = 0; // Начинаем заново, если сервер вернул 200 OK
+                    }
+
+                    await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
+                    await using var fileStream = new FileStream(
+                        tempPath,
+                        isPartial && existingLength > 0 ? FileMode.Append : FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize,
+                        useAsync: true);
+
+                    long totalDownloaded = existingLength;
+                    int lastReportedPercent = -1;
+
+                    if (totalBytes > 0 && existingLength > 0)
+                    {
+                        int initialPct = (int)Math.Min(100, Math.Round((double)totalDownloaded / totalBytes * 100));
+                        lastReportedPercent = initialPct;
+                        onProgress(initialPct, totalDownloaded, totalBytes);
+                    }
+
+                    int bytesRead;
+                    while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, bufferSize), ct)) > 0)
+                    {
+                        await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
+                        totalDownloaded += bytesRead;
+                        if (totalBytes > 0)
+                        {
+                            int pct = (int)Math.Min(100, Math.Round((double)totalDownloaded / totalBytes * 100));
+                            if (pct != lastReportedPercent)
+                            {
+                                lastReportedPercent = pct;
+                                onProgress(pct, totalDownloaded, totalBytes);
+                            }
+                        }
+                    }
+
+                    await fileStream.FlushAsync(ct);
+                    fileStream.Close();
+
+                    // Проверка целостности
+                    var fi = new FileInfo(tempPath);
+                    if (totalBytes > 0 && fi.Length != totalBytes)
+                    {
+                        throw new IOException($"Размер скачанного файла ({fi.Length}) не совпадает с ожидаемым ({totalBytes}).");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(updateInfo.Sha512) && !VerifySha512(tempPath, updateInfo.Sha512))
+                    {
+                        try { File.Delete(tempPath); } catch { }
+                        throw new IOException("Контрольная сумма SHA-512 скачанного обновления не совпадает.");
+                    }
+
+                    File.Move(tempPath, destPath, overwrite: true);
+                    onProgress(100, totalDownloaded, totalBytes > 0 ? totalBytes : totalDownloaded);
+                    return destPath;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex) when (attempt < maxRetries)
+                {
+                    Debug.WriteLine($"[UpdateService] Попытка {attempt} завершилась ошибкой: {ex.Message}. Ожидание перед повтором...");
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(6, attempt * 2)), ct);
                 }
             }
+
+            throw new IOException($"Не удалось завершить загрузку обновления после {maxRetries} попыток.");
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+    }
 
-        return destPath;
+    private static bool VerifySha512(string filePath, string expectedHex)
+    {
+        if (string.IsNullOrWhiteSpace(expectedHex) || !File.Exists(filePath)) return true;
+        try
+        {
+            using var sha = SHA512.Create();
+            using var fs = File.OpenRead(filePath);
+            byte[] hash = sha.ComputeHash(fs);
+            return string.Equals(Convert.ToHexString(hash), expectedHex.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void InstallUpdate(string installerPath)
@@ -261,7 +404,7 @@ public partial class UpdateService
             return vNext > vCurr;
         }
 
-        // Fallback без аллокаций через ReadOnlySpan<char>
+        // Fallback по сегментам через ReadOnlySpan<char>
         ReadOnlySpan<char> sNext = normNext.AsSpan();
         ReadOnlySpan<char> sCurr = normCurr.AsSpan();
 

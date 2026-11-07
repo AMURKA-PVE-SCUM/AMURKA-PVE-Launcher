@@ -10,9 +10,9 @@
     <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
     <AssemblyName>AMURKA PVE Launcher Setup</AssemblyName>
     <RootNamespace>AmurkaInstaller</RootNamespace>
-    <Version>2.1.26</Version>
-    <FileVersion>2.1.26.0</FileVersion>
-    <ProductVersion>2.1.26.0</ProductVersion>
+    <Version>2.1.27</Version>
+    <FileVersion>2.1.27.0</FileVersion>
+    <ProductVersion>2.1.27.0</ProductVersion>
     <Company>AMURKA PVE</Company>
     <Product>AMURKA PVE Launcher Installer</Product>
     <Description>Брендированный установщик AMURKA PVE Launcher</Description>
