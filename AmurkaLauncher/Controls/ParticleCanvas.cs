@@ -37,6 +37,8 @@ public sealed class ParticleCanvas : FrameworkElement
         return brushes;
     }
 
+    private Window? _parentWindow;
+
     public ParticleCanvas()
     {
         Loaded += OnLoaded;
@@ -46,12 +48,27 @@ public sealed class ParticleCanvas : FrameworkElement
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _parentWindow = Window.GetWindow(this);
+        if (_parentWindow != null)
+        {
+            _parentWindow.StateChanged += OnWindowStateChanged;
+        }
         UpdateRenderingSubscription();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        if (_parentWindow != null)
+        {
+            _parentWindow.StateChanged -= OnWindowStateChanged;
+            _parentWindow = null;
+        }
         UnhookRendering();
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        UpdateRenderingSubscription();
     }
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -61,7 +78,8 @@ public sealed class ParticleCanvas : FrameworkElement
 
     private void UpdateRenderingSubscription()
     {
-        if (IsLoaded && IsVisible)
+        bool isMinimized = _parentWindow?.WindowState == WindowState.Minimized;
+        if (IsLoaded && IsVisible && !isMinimized)
         {
             HookRendering();
         }

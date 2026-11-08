@@ -1,72 +1,141 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace AmurkaLauncher.Services;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public partial class ScumDetectionService
 {
-    [GeneratedRegex(@"""path""\s+""([^""]+)""", RegexOptions.CultureInvariant)]
-    private static partial Regex LibraryPathRegex();
-
     [GeneratedRegex(@"""installdir""\s+""([^""]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex InstallDirRegex();
 
+    /// <summary>
+    /// Автоматическое определение папки игры SCUM с поддержкой переноса на любой диск/SSD.
+    /// 1. Проверяет активный запущенный процесс SCUM (мгновенное точное определение).
+    /// 2. Ищет прямую запись Steam AppID 513710 в реестре Windows Uninstall (InstallLocation).
+    /// 3. Ищет активный клиент Steam в реестре Windows.
+    /// 4. Сканирует все подключенные диски (включая внешние SSD/HDD и нестандартные библиотеки).
+    /// 5. Считывает libraryfolders.vdf с приоритетом библиотек, содержащих AppID 513710.
+    /// 6. Проверяет appmanifest_513710.acf и стандартные пути common\SCUM.
+    /// </summary>
     public string? AutoDetectScum()
     {
-        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 1) Если игра прямо сейчас запущена — получаем реальный физический путь процесса
+        string? running = DetectFromRunningProcess();
+        if (!string.IsNullOrEmpty(running) && FindScumExe(running) != null)
+        {
+            return NormalizeGameRoot(running);
+        }
 
-        // 1) Steam из реестра
-        string?[] regPaths =
+        // 2) Прямая запись Steam App 513710 в реестре деинсталлятора Windows (InstallLocation)
+        string?[] appRegLocations =
         [
+            GetRegistryValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 513710", "InstallLocation"),
+            GetRegistryValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 513710", "InstallLocation"),
+            GetRegistryValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 513710", "InstallLocation")
+        ];
+
+        foreach (var loc in appRegLocations)
+        {
+            if (!string.IsNullOrWhiteSpace(loc) && FindScumExe(loc) != null)
+            {
+                return NormalizeGameRoot(loc);
+            }
+        }
+
+        var candidateLibraries = new List<string>();
+        var candidateSteamRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 3) Steam из реестра
+        string?[] steamRegPaths =
+        [
+            GetRegistryValue(@"HKEY_CURRENT_USER\Software\Valve\Steam\ActiveProcess", "SteamPath"),
             GetRegistryValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath"),
             GetRegistryValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Valve\Steam", "InstallPath"),
             GetRegistryValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam", "InstallPath")
         ];
 
-        foreach (var rp in regPaths)
+        foreach (var rp in steamRegPaths)
         {
             if (!string.IsNullOrWhiteSpace(rp) && Directory.Exists(rp))
             {
-                candidates.Add(Path.GetFullPath(rp));
+                candidateSteamRoots.Add(Path.GetFullPath(rp));
             }
         }
 
-        // 2) Стандартные пути
+        // 4) Стандартные системные пути Steam
         string[] standardPaths =
         [
             @"C:\Program Files (x86)\Steam",
-            @"C:\Program Files\Steam"
+            @"C:\Program Files\Steam",
+            @"D:\Steam",
+            @"E:\Steam"
         ];
         foreach (var p in standardPaths)
         {
             if (Directory.Exists(p))
             {
-                candidates.Add(p);
+                candidateSteamRoots.Add(Path.GetFullPath(p));
             }
         }
 
-        // 3) Поиск Steam по всем дискам D-Z
+        // 5) Поиск папок Steam и прямого расположения SCUM по ВСЕМ дискам системы (Fixed и Removable)
         foreach (var drive in DriveInfo.GetDrives())
         {
-            if (drive.IsReady && drive.DriveType == DriveType.Fixed)
+            try
             {
-                string root = drive.RootDirectory.FullName;
-                string[] possibleDirs = ["Steam", "SteamLibrary"];
-                foreach (var dir in possibleDirs)
+                if (drive.IsReady && (drive.DriveType == DriveType.Fixed || drive.DriveType == DriveType.Removable))
                 {
-                    string candidate = Path.Combine(root, dir);
-                    if (Directory.Exists(candidate))
+                    string root = drive.RootDirectory.FullName;
+
+                    // Прямая проверка частых мест установки SCUM на любом диске
+                    string[] directScumPaths =
+                    [
+                        Path.Combine(root, "SteamLibrary", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "Steam", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "Games", "SCUM"),
+                        Path.Combine(root, "SCUM"),
+                        Path.Combine(root, "Games", "SteamLibrary", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "Games", "Steam", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "SteamGames", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "Program Files (x86)", "Steam", "steamapps", "common", "SCUM"),
+                        Path.Combine(root, "Program Files", "Steam", "steamapps", "common", "SCUM")
+                    ];
+
+                    foreach (var directPath in directScumPaths)
                     {
-                        candidates.Add(candidate);
+                        if (FindScumExe(directPath) != null)
+                        {
+                            return NormalizeGameRoot(directPath);
+                        }
+                    }
+
+                    // Обнаружение базовых каталогов Steam / SteamLibrary на диске
+                    string[] possibleSteamDirs =
+                    [
+                        Path.Combine(root, "Steam"),
+                        Path.Combine(root, "SteamLibrary"),
+                        Path.Combine(root, "Games", "Steam"),
+                        Path.Combine(root, "Games", "SteamLibrary"),
+                        Path.Combine(root, "SteamGames")
+                    ];
+
+                    foreach (var sDir in possibleSteamDirs)
+                    {
+                        if (Directory.Exists(sDir))
+                        {
+                            candidateSteamRoots.Add(Path.GetFullPath(sDir));
+                        }
                     }
                 }
             }
+            catch { }
         }
 
-        // 4) Все библиотеки из libraryfolders.vdf
-        var baseList = candidates.ToList();
-        foreach (var steamBase in baseList)
+        // 6) Считывание libraryfolders.vdf из всех найденных каталогов Steam
+        foreach (var steamBase in candidateSteamRoots)
         {
             string vdf = Path.Combine(steamBase, "steamapps", "libraryfolders.vdf");
             if (File.Exists(vdf))
@@ -74,28 +143,26 @@ public partial class ScumDetectionService
                 try
                 {
                     string content = File.ReadAllText(vdf);
-                    var matches = LibraryPathRegex().Matches(content);
-                    foreach (Match m in matches)
+                    var parsedLibs = ParseSteamLibraries(content);
+                    foreach (var lib in parsedLibs)
                     {
-                        if (m.Groups.Count > 1)
+                        if (!candidateLibraries.Contains(lib, StringComparer.OrdinalIgnoreCase))
                         {
-                            string libPath = m.Groups[1].Value.Replace(@"\\", @"\");
-                            if (Directory.Exists(libPath))
-                            {
-                                candidates.Add(Path.GetFullPath(libPath));
-                            }
+                            candidateLibraries.Add(lib);
                         }
                     }
                 }
-                catch
-                {
-                    // Ignore parse errors
-                }
+                catch { }
+            }
+
+            if (!candidateLibraries.Contains(steamBase, StringComparer.OrdinalIgnoreCase))
+            {
+                candidateLibraries.Add(steamBase);
             }
         }
 
-        // 5) Быстрый поиск по appmanifest (SCUM AppID = 513710)
-        foreach (var lib in candidates)
+        // 7) Точный поиск по appmanifest (SCUM AppID = 513710) в приоритетном порядке библиотек
+        foreach (var lib in candidateLibraries)
         {
             string manifest = Path.Combine(lib, "steamapps", "appmanifest_513710.acf");
             if (File.Exists(manifest))
@@ -110,41 +177,262 @@ public partial class ScumDetectionService
                         string scum = Path.Combine(lib, "steamapps", "common", installDir);
                         if (FindScumExe(scum) != null)
                         {
-                            return scum;
+                            return NormalizeGameRoot(scum);
                         }
                     }
                 }
-                catch
-                {
-                    // Ignore
-                }
+                catch { }
             }
-        }
 
-        // 6) Перебор common/SCUM во всех библиотеках
-        foreach (var lib in candidates)
-        {
-            string scum = Path.Combine(lib, "steamapps", "common", "SCUM");
-            if (FindScumExe(scum) != null)
+            // Прямая проверка common\SCUM в этой библиотеке
+            string directScum = Path.Combine(lib, "steamapps", "common", "SCUM");
+            if (FindScumExe(directScum) != null)
             {
-                return scum;
+                return NormalizeGameRoot(directScum);
             }
         }
 
         return null;
     }
 
+    /// <summary>
+    /// Парсит содержимое libraryfolders.vdf.
+    /// Библиотеки, в секции которых указан AppID SCUM (513710), помещаются в начало списка.
+    /// </summary>
+    public static List<string> ParseSteamLibraries(string vdfContent)
+    {
+        var prioritized = new List<string>();
+        var others = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(vdfContent)) return prioritized;
+
+        // Поиск блоков библиотек современного формата: "0" { "path" "..." ... "apps" { "513710" ... } }
+        var libBlockRegex = new Regex(@"""\d+""\s*\{(?<content>[^{}]*?(?:\{[^{}]*\}[^{}]*?)*)\}", RegexOptions.Singleline);
+        var matches = libBlockRegex.Matches(vdfContent);
+
+        if (matches.Count > 0)
+        {
+            foreach (Match m in matches)
+            {
+                string block = m.Groups["content"].Value;
+                var pathMatch = Regex.Match(block, @"""path""\s+""([^""]+)""");
+                if (pathMatch.Success)
+                {
+                    string rawPath = pathMatch.Groups[1].Value.Replace(@"\\", @"\");
+                    if (Directory.Exists(rawPath))
+                    {
+                        string fullPath = Path.GetFullPath(rawPath);
+                        if (block.Contains(@"""513710""", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!prioritized.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                                prioritized.Add(fullPath);
+                        }
+                        else
+                        {
+                            if (!others.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                                others.Add(fullPath);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Запасной вариант для старого формата VDF ("1" "D:\\SteamLibrary")
+        var oldPathMatches = Regex.Matches(vdfContent, @"""(?:path|\d+)""\s+""([A-Za-z]:\\[^""]+)""");
+        foreach (Match m in oldPathMatches)
+        {
+            string rawPath = m.Groups[1].Value.Replace(@"\\", @"\");
+            if (Directory.Exists(rawPath))
+            {
+                string fullPath = Path.GetFullPath(rawPath);
+                if (!prioritized.Contains(fullPath, StringComparer.OrdinalIgnoreCase) &&
+                    !others.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    others.Add(fullPath);
+                }
+            }
+        }
+
+        prioritized.AddRange(others);
+        return prioritized;
+    }
+
+    private static string? DetectFromRunningProcess()
+    {
+        try
+        {
+            string[] names = ["SCUM", "SCUM-Win64-Shipping"];
+            foreach (var name in names)
+            {
+                var processes = Process.GetProcessesByName(name);
+                try
+                {
+                    foreach (var proc in processes)
+                    {
+                        try
+                        {
+                            string? exePath = proc.MainModule?.FileName;
+                            if (!string.IsNullOrWhiteSpace(exePath) && File.Exists(exePath))
+                            {
+                                return NormalizeGameRoot(Path.GetDirectoryName(exePath) ?? string.Empty);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                finally
+                {
+                    foreach (var p in processes) p.Dispose();
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Автоматическая сверка и гарантированная синхронизация путей игры и модов.
+    /// Если игра была перенесена на другой диск — автоматически находит её и перепривязывает папку ~mods.
+    /// </summary>
+    public bool ResolveAndEnsurePaths(ref string? gamePath, ref string? modsPath)
+    {
+        bool changed = false;
+
+        // 1. Проверяем, существует ли exe по текущему пути
+        string? currentExe = FindScumExe(gamePath);
+
+        // 2. Если exe не существует (игра перенесена на другой диск или путь пуст)
+        if (currentExe == null)
+        {
+            string? detected = AutoDetectScum();
+            if (!string.IsNullOrEmpty(detected))
+            {
+                gamePath = detected;
+                changed = true;
+            }
+        }
+        else
+        {
+            string normalized = NormalizeGameRoot(gamePath!);
+            if (!string.Equals(gamePath, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                gamePath = normalized;
+                changed = true;
+            }
+        }
+
+        // 3. Автоматически перенаправляем папку ~mods на актуальный диск игры
+        if (!string.IsNullOrWhiteSpace(gamePath))
+        {
+            string expectedMods = GetModsPath(gamePath);
+            if (!string.Equals(modsPath, expectedMods, StringComparison.OrdinalIgnoreCase))
+            {
+                modsPath = expectedMods;
+                changed = true;
+            }
+
+            // Гарантируем физическое создание папки ~mods
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(modsPath) && !Directory.Exists(modsPath))
+                {
+                    Directory.CreateDirectory(modsPath);
+                }
+            }
+            catch { }
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Нормализует путь к корневому каталогу игры SCUM.
+    /// Если пользователь выбрал SCUM.exe, Binaries\Win64, Content\Paks, ~mods или вложенную SCUM,
+    /// метод корректно поднимается до канонического корня steamapps\common\SCUM.
+    /// </summary>
+    public static string NormalizeGameRoot(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        string normalized = path.Trim().TrimEnd('\\', '/');
+
+        // Если указан сам исполняемый файл
+        if (normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = Path.GetDirectoryName(normalized) ?? normalized;
+        }
+
+        // Если указана папка Binaries\Win64
+        if (normalized.EndsWith(@"\Binaries\Win64", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("/Binaries/Win64", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.Parent?.FullName;
+            if (parent != null) normalized = parent;
+        }
+        else if (normalized.EndsWith(@"\Binaries", StringComparison.OrdinalIgnoreCase) ||
+                 normalized.EndsWith("/Binaries", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.FullName;
+            if (parent != null) normalized = parent;
+        }
+
+        // Если указана папка ~mods
+        if (normalized.EndsWith(@"\~mods", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("/~mods", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.FullName;
+            if (parent != null) normalized = parent;
+        }
+
+        // Если указана папка Content\Paks
+        if (normalized.EndsWith(@"\Content\Paks", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("/Content/Paks", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.Parent?.FullName;
+            if (parent != null) normalized = parent;
+        }
+        else if (normalized.EndsWith(@"\Content", StringComparison.OrdinalIgnoreCase) ||
+                 normalized.EndsWith("/Content", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.FullName;
+            if (parent != null) normalized = parent;
+        }
+
+        // Если указана вложенная папка SCUM (например: ...\common\SCUM\SCUM)
+        if (normalized.EndsWith(@"\SCUM\SCUM", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("/SCUM/SCUM", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Directory.GetParent(normalized)?.FullName;
+            if (parent != null) normalized = parent;
+        }
+        else
+        {
+            // Проверка случая, когда выбрана внутренняя папка SCUM, а в родителе есть SCUM\Binaries\Win64\SCUM.exe
+            var parent = Directory.GetParent(normalized);
+            if (parent != null && Path.GetFileName(normalized).Equals("SCUM", StringComparison.OrdinalIgnoreCase))
+            {
+                if (File.Exists(Path.Combine(parent.FullName, "SCUM", "Binaries", "Win64", "SCUM.exe")))
+                {
+                    normalized = parent.FullName;
+                }
+            }
+        }
+
+        return normalized.TrimEnd('\\', '/');
+    }
+
     public string? FindScumExe(string? gamePath)
     {
         if (string.IsNullOrWhiteSpace(gamePath)) return null;
 
-        string normalized = gamePath.TrimEnd('\\', '/');
+        string normalized = NormalizeGameRoot(gamePath);
 
         string[] possibleExePaths =
         [
             Path.Combine(normalized, "SCUM", "Binaries", "Win64", "SCUM.exe"),
             Path.Combine(normalized, "Binaries", "Win64", "SCUM.exe"),
-            Path.Combine(normalized, "SCUM.exe")
+            Path.Combine(normalized, "SCUM.exe"),
+            Path.Combine(normalized, "SCUM", "Binaries", "Win64", "SCUM-Win64-Shipping.exe"),
+            Path.Combine(normalized, "Binaries", "Win64", "SCUM-Win64-Shipping.exe")
         ];
 
         foreach (var p in possibleExePaths)
@@ -155,32 +443,31 @@ public partial class ScumDetectionService
         return null;
     }
 
+    /// <summary>
+    /// Возвращает точный физический путь к папке ~mods для указанного корня игры.
+    /// Учитывает Unreal Engine структуру SCUM\Content\Paks\~mods и Content\Paks\~mods.
+    /// </summary>
     public string GetModsPath(string gamePath)
     {
         if (string.IsNullOrWhiteSpace(gamePath)) return string.Empty;
 
-        string normalized = gamePath.TrimEnd('\\', '/');
+        string normalized = NormalizeGameRoot(gamePath);
 
-        // Если пользователь указал папку SCUM\SCUM:
-        if (normalized.EndsWith(@"\SCUM\SCUM", StringComparison.OrdinalIgnoreCase) ||
-            normalized.EndsWith("/SCUM/SCUM", StringComparison.OrdinalIgnoreCase))
+        // 1. Проверяем стандартную структуру Unreal Engine: root\SCUM\Content\Paks
+        string nestedPaks = Path.Combine(normalized, "SCUM", "Content", "Paks");
+        if (Directory.Exists(nestedPaks))
         {
-            return Path.Combine(normalized, "Content", "Paks", "~mods");
+            return Path.Combine(nestedPaks, "~mods");
         }
 
-        // Если указана папка ...\Binaries\Win64
-        if (normalized.EndsWith(@"\Binaries\Win64", StringComparison.OrdinalIgnoreCase) ||
-            normalized.EndsWith("/Binaries/Win64", StringComparison.OrdinalIgnoreCase))
+        // 2. Проверяем альтернативную/плоскую структуру: root\Content\Paks
+        string directPaks = Path.Combine(normalized, "Content", "Paks");
+        if (Directory.Exists(directPaks))
         {
-            var parent = Directory.GetParent(normalized)?.Parent?.FullName;
-            if (parent != null)
-            {
-                return Path.Combine(parent, "Content", "Paks", "~mods");
-            }
+            return Path.Combine(directPaks, "~mods");
         }
 
-        // Для стандартного пути SteamLibrary\steamapps\common\SCUM:
-        // Моды строго попадают в: SteamLibrary\steamapps\common\SCUM\SCUM\Content\Paks\~mods
+        // 3. Стандартный путь SCUM по умолчанию
         return Path.Combine(normalized, "SCUM", "Content", "Paks", "~mods");
     }
 

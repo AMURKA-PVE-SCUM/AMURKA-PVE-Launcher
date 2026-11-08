@@ -37,15 +37,15 @@ public class ModManagerService
         ];
     }
 
-    public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory>? categories = null)
+    public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory>? categories = null, CancellationToken ct = default)
     {
         var categorySet = (categories ?? GetDefaultCategories()).Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // Static catalog is generated in the mods repository by GitHub Actions.
         // Client machines never need a token or an API request in normal operation.
-        using var catalogResponse = await Client.GetAsync($"https://raw.githubusercontent.com/{Repository}/main/mods.json");
+        using var catalogResponse = await Client.GetAsync($"https://raw.githubusercontent.com/{Repository}/main/mods.json?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct);
         if (catalogResponse.IsSuccessStatusCode)
         {
-            using var catalog = JsonDocument.Parse(await catalogResponse.Content.ReadAsStringAsync());
+            using var catalog = JsonDocument.Parse(await catalogResponse.Content.ReadAsStringAsync(ct));
             var root = catalog.RootElement;
             if (root.GetProperty("schemaVersion").GetInt32() != 1)
                 throw new InvalidOperationException("Неизвестный формат каталога модов.");
@@ -58,15 +58,15 @@ public class ModManagerService
         if (catalogResponse.StatusCode != HttpStatusCode.NotFound)
             throw new InvalidOperationException("Не удалось загрузить каталог модов. Проверьте подключение и повторите попытку.");
         // Pin downloads to the commit used to read the catalog.
-        using var commitResponse = await Client.GetAsync($"https://api.github.com/repos/{Repository}/commits/main");
+        using var commitResponse = await Client.GetAsync($"https://api.github.com/repos/{Repository}/commits/main", ct);
         if (commitResponse.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
             throw new InvalidOperationException("GitHub временно ограничил запросы. Статический каталог модов ещё не доступен. Повторите проверку позже.");
         commitResponse.EnsureSuccessStatusCode();
-        using var commit = JsonDocument.Parse(await commitResponse.Content.ReadAsStringAsync());
+        using var commit = JsonDocument.Parse(await commitResponse.Content.ReadAsStringAsync(ct));
         string revision = commit.RootElement.GetProperty("sha").GetString()!;
-        using var response = await Client.GetAsync($"https://api.github.com/repos/{Repository}/git/trees/{revision}?recursive=1");
+        using var response = await Client.GetAsync($"https://api.github.com/repos/{Repository}/git/trees/{revision}?recursive=1", ct);
         response.EnsureSuccessStatusCode();
-        using var tree = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var tree = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         if (tree.RootElement.GetProperty("truncated").GetBoolean())
             throw new InvalidOperationException("GitHub вернул неполный список модов. Синхронизация остановлена.");
         return ParseModFiles(tree.RootElement.GetProperty("tree"), categorySet, revision);
@@ -113,7 +113,22 @@ public class ModManagerService
     public List<string> ScanInstalledMods(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return [];
-        return Directory.EnumerateFiles(path).Where(IsModFile).Select(Path.GetFileName).OfType<string>().ToList();
+        try
+        {
+            return Directory.EnumerateFiles(path, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => !Path.GetFileName(f).StartsWith(".amurka-", StringComparison.OrdinalIgnoreCase) &&
+                            !Path.GetFileName(f).EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) &&
+                            !Path.GetFileName(f).EndsWith(".bak", StringComparison.OrdinalIgnoreCase) &&
+                            !Path.GetFileName(f).EndsWith(".part", StringComparison.OrdinalIgnoreCase))
+                .Where(IsModFile)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     // Git's blob SHA-1 includes a header; a plain file SHA-1 is different.
@@ -145,7 +160,77 @@ public class ModManagerService
     }
     public async Task RefreshInstalledStateAsync(IEnumerable<ModItem> mods, string path, CancellationToken ct = default)
     {
-        foreach (var mod in mods) mod.IsInstalled = !string.IsNullOrWhiteSpace(path) && await IsCurrentAsync(mod, Path.Combine(path, mod.Name), ct);
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            foreach (var mod in mods) mod.IsInstalled = false;
+            return;
+        }
+
+        var state = ReadState(path);
+        bool stateModified = false;
+
+        foreach (var mod in mods)
+        {
+            ct.ThrowIfCancellationRequested();
+            string filePath = Path.Combine(path, mod.Name);
+
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    mod.IsInstalled = false;
+                    if (state.Remove(mod.Name)) stateModified = true;
+                    continue;
+                }
+
+                var fileInfo = new FileInfo(filePath);
+                if (fileInfo.Length != mod.Size)
+                {
+                    mod.IsInstalled = false;
+                    continue;
+                }
+
+                // Быстрая проверка: если файл зафиксирован в состоянии и не менялся по размеру и штампу времени
+                if (state.TryGetValue(mod.Name, out var cached) &&
+                    string.Equals(cached.Sha, mod.Sha, StringComparison.OrdinalIgnoreCase) &&
+                    cached.Size == mod.Size &&
+                    cached.LastWriteTimeUtcTicks != 0 &&
+                    cached.LastWriteTimeUtcTicks == fileInfo.LastWriteTimeUtc.Ticks)
+                {
+                    mod.IsInstalled = true;
+                    continue;
+                }
+
+                // Полная валидация содержимого через хеш Git blob
+                string actualHash = await ComputeGitBlobHashAsync(filePath, ct);
+                if (string.Equals(actualHash, mod.Sha, StringComparison.OrdinalIgnoreCase))
+                {
+                    mod.IsInstalled = true;
+                    state[mod.Name] = new ManagedMod
+                    {
+                        Name = mod.Name,
+                        Category = mod.Category,
+                        Sha = mod.Sha,
+                        Size = fileInfo.Length,
+                        LastWriteTimeUtcTicks = fileInfo.LastWriteTimeUtc.Ticks
+                    };
+                    stateModified = true;
+                }
+                else
+                {
+                    mod.IsInstalled = false;
+                }
+            }
+            catch
+            {
+                mod.IsInstalled = false;
+            }
+        }
+
+        if (stateModified)
+        {
+            try { WriteState(path, state); } catch { }
+        }
     }
 
     public async Task<(int success, int errors)> DownloadAllModsAsync(List<ModItem> mods, string modsPath,
@@ -233,8 +318,20 @@ public class ModManagerService
                     foreach (var (_, backup) in backups)
                         if (backup != null && File.Exists(backup)) File.Delete(backup);
             }
-            foreach (var mod in mods) mod.IsInstalled = true;
-            foreach (var mod in mods) state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
+            foreach (var mod in mods)
+            {
+                mod.IsInstalled = true;
+                string modFilePath = Path.Combine(modsPath, mod.Name);
+                var fi = new FileInfo(modFilePath);
+                state[mod.Name] = new ManagedMod
+                {
+                    Name = mod.Name,
+                    Category = mod.Category,
+                    Sha = mod.Sha,
+                    Size = fi.Exists ? fi.Length : mod.Size,
+                    LastWriteTimeUtcTicks = fi.Exists ? fi.LastWriteTimeUtc.Ticks : 0
+                };
+            }
             WriteState(modsPath, state);
             onProgress(100, "Моды актуальны", total, total);
             return (mods.Count, 0);
@@ -281,21 +378,48 @@ public class ModManagerService
         public string Name { get; set; } = "";
         public string Category { get; set; } = "";
         public string Sha { get; set; } = "";
+        public long Size { get; set; }
+        public long LastWriteTimeUtcTicks { get; set; }
     }
+
     private static Dictionary<string, ManagedMod> ReadState(string path)
     {
         string file = Path.Combine(path, StateFile);
         if (!File.Exists(file)) return new(StringComparer.OrdinalIgnoreCase);
-        var entries = JsonSerializer.Deserialize<List<ManagedMod>>(File.ReadAllText(file))
-            ?? throw new InvalidOperationException("Повреждён список установленных модов.");
-        foreach (var entry in entries) ValidateName(entry.Name);
-        return entries.ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            string content = File.ReadAllText(file);
+            if (string.IsNullOrWhiteSpace(content)) return new(StringComparer.OrdinalIgnoreCase);
+
+            var entries = JsonSerializer.Deserialize<List<ManagedMod>>(content);
+            if (entries == null) return new(StringComparer.OrdinalIgnoreCase);
+
+            var dict = new Dictionary<string, ManagedMod>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Name) && IsModFile(entry.Name))
+                {
+                    dict[entry.Name] = entry;
+                }
+            }
+            return dict;
+        }
+        catch
+        {
+            // Безопасный возврат пустого состояния при повреждении файла
+            return new(StringComparer.OrdinalIgnoreCase);
+        }
     }
+
     private static void WriteState(string path, Dictionary<string, ManagedMod> state)
     {
-        string file = Path.Combine(path, StateFile);
-        File.WriteAllText(file + ".tmp", JsonSerializer.Serialize(state.Values.ToList()));
-        File.Move(file + ".tmp", file, overwrite: true);
+        try
+        {
+            string file = Path.Combine(path, StateFile);
+            File.WriteAllText(file + ".tmp", JsonSerializer.Serialize(state.Values.ToList()));
+            File.Move(file + ".tmp", file, overwrite: true);
+        }
+        catch { }
     }
 
     public void RecordVerifiedInstalledMods(IEnumerable<ModItem> mods, string modsPath)
@@ -303,10 +427,37 @@ public class ModManagerService
         ValidateModsPath(modsPath);
         if (!Directory.Exists(modsPath)) return;
         var state = ReadState(modsPath);
+        bool modified = false;
+
         foreach (var mod in mods.Where(m => m.IsInstalled))
-            state[mod.Name] = new ManagedMod { Name = mod.Name, Category = mod.Category, Sha = mod.Sha };
-        WriteState(modsPath, state);
+        {
+            string filePath = Path.Combine(modsPath, mod.Name);
+            long size = mod.Size;
+            long ticks = 0;
+            if (File.Exists(filePath))
+            {
+                var fi = new FileInfo(filePath);
+                size = fi.Length;
+                ticks = fi.LastWriteTimeUtc.Ticks;
+            }
+
+            state[mod.Name] = new ManagedMod
+            {
+                Name = mod.Name,
+                Category = mod.Category,
+                Sha = mod.Sha,
+                Size = size,
+                LastWriteTimeUtcTicks = ticks
+            };
+            modified = true;
+        }
+
+        if (modified)
+        {
+            WriteState(modsPath, state);
+        }
     }
+
     public List<string> FindUntrackedOrObsoleteFiles(List<ModItem> catalog, string modsPath)
     {
         if (string.IsNullOrWhiteSpace(modsPath) || !Directory.Exists(modsPath)) return [];
@@ -314,10 +465,17 @@ public class ModManagerService
         try
         {
             return Directory.EnumerateFiles(modsPath, "*.*", SearchOption.TopDirectoryOnly)
-                .Where(f => !Path.GetFileName(f).Equals(StateFile, StringComparison.OrdinalIgnoreCase) &&
-                            !Path.GetFileName(f).EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+                .Where(f => {
+                    string name = Path.GetFileName(f);
+                    if (string.IsNullOrEmpty(name)) return false;
+                    if (name.Equals(StateFile, StringComparison.OrdinalIgnoreCase)) return false;
+                    if (name.StartsWith(".amurka-", StringComparison.OrdinalIgnoreCase)) return false;
+                    if (name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return false;
+                    if (name.EndsWith(".part", StringComparison.OrdinalIgnoreCase)) return false;
+                    if (name.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) return false;
+                    return !allowedNames.Contains(name);
+                })
                 .Select(Path.GetFileName)
-                .Where(f => !string.IsNullOrEmpty(f) && !allowedNames.Contains(f))
                 .Select(f => f!)
                 .ToList();
         }
@@ -344,6 +502,15 @@ public class ModManagerService
             foreach (var file in files)
             {
                 string name = Path.GetFileName(file);
+                if (name.Equals(StateFile, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Защищаем активные частичные загрузки модов из текущего каталога
+                if (name.StartsWith(".amurka-", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".part", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (catalog.Any(m => name.StartsWith($".amurka-{m.Name}-", StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                }
+
                 if (!allowedNames.Contains(name))
                 {
                     try

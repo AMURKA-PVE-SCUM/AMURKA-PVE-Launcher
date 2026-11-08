@@ -13,6 +13,10 @@
         AllowsTransparency="True"
         Background="#0A0A0A"
         Icon="Resources/icon.ico"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        RenderOptions.ClearTypeHint="Enabled"
         StateChanged="Window_StateChanged">
 
     <Border BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="12">
@@ -44,7 +48,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Left: Branding & Icon -->
+                        <!-- Left: Branding & Icon & Sleek Top Version Pill -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                             <Image Source="Resources/icon.ico" Width="18" Height="18" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                             <TextBlock Text="AMURKA" FontWeight="Black" FontSize="13" Foreground="#FFFFFF" VerticalAlignment="Center"/>
@@ -52,8 +56,22 @@
                             <Border Background="#1600FF88" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="4" Padding="6,1.5" Margin="8,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="LAUNCHER" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
                             </Border>
-                            <Border Background="#186C5CE7" BorderBrush="#356C5CE7" BorderThickness="1" CornerRadius="4" Padding="6,1.5" Margin="6,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="v2.1.27" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
+
+                            <!-- Sleek Branded Top Version Badge -->
+                            <Border Background="#1A0D1117" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                    Cursor="Hand" MouseLeftButtonDown="UpdateStatusDot_MouseLeftButtonDown" ToolTip="Статус клиента. Нажмите для проверки обновлений.">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#00FF88" BlurRadius="8" Opacity="0.25" ShadowDepth="0"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="UpdateStatusDot" Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,5,0">
+                                        <Ellipse.Effect>
+                                            <DropShadowEffect Color="#00FF88" BlurRadius="6" ShadowDepth="0"/>
+                                        </Ellipse.Effect>
+                                    </Ellipse>
+                                    <TextBlock Text="v" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock x:Name="AppVersionText" Text="2.1.28" FontSize="9.5" FontWeight="Black" Foreground="{StaticResource AccentBrush}"/>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
 
@@ -171,7 +189,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
+                                <StackPanel>
                                     <TextBlock Text="AMURKA" FontSize="28" FontWeight="Black" Foreground="#FFFFFF"/>
                                     <TextBlock Text="PVE MOD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,6"/>
                                     <Border Background="#14FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="14"
@@ -182,19 +200,6 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
-
-                                <!-- Sleek Version Badge in Header -->
-                                <Border Grid.Column="1" VerticalAlignment="Top" Margin="0,4,0,0"
-                                        Background="#1400FF88" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8" Padding="8,4">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,6,0">
-                                            <Ellipse.Effect>
-                                                <DropShadowEffect Color="#00FF88" BlurRadius="6" ShadowDepth="0"/>
-                                            </Ellipse.Effect>
-                                        </Ellipse>
-                                        <TextBlock Text="v2.1.27" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                                    </StackPanel>
-                                </Border>
                             </Grid>
 
                             <!-- Progress Section -->
@@ -327,15 +332,12 @@
                             </StackPanel>
 
                             <!-- Footer -->
-                            <Border Grid.Row="7" Background="#14000000" BorderBrush="#18FFFFFF" BorderThickness="1" CornerRadius="6" Padding="10,4" HorizontalAlignment="Center" Margin="0,4,0,0">
+                            <Border Grid.Row="7" Background="#14000000" BorderBrush="#18FFFFFF" BorderThickness="1" CornerRadius="6" Padding="12,4" HorizontalAlignment="Center" Margin="0,4,0,0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="AMURKA PVE" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text=" · " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                     <TextBlock Text="Created by " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                     <TextBlock Text="DOMO" FontSize="10" FontWeight="Bold" Foreground="{StaticResource PurpleBrush}"/>
-                                    <TextBlock Text=" · " FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
-                                    <Border Background="#1800FF88" CornerRadius="3" Padding="4,1" Margin="2,0,4,0" Cursor="Hand" MouseLeftButtonDown="UpdateStatusDot_MouseLeftButtonDown" ToolTip="Проверить / показать окно обновления">
-                                        <TextBlock x:Name="AppVersionText" Text="v2.1.27" FontSize="9.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                                    </Border>
-                                    <Ellipse x:Name="UpdateStatusDot" Width="6" Height="6" Fill="#555555" Margin="2,0,0,0" Cursor="Hand" MouseLeftButtonDown="UpdateStatusDot_MouseLeftButtonDown" ToolTip="Статус обновления. Нажмите, чтобы открыть окно обновления."/>
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -367,7 +369,7 @@
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="GamePathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
-                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="GamePathInput_TextChanged"/>
+                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="GamePathInput_TextChanged" LostFocus="GamePathInput_LostFocus"/>
                                     <Button x:Name="BrowseGameBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseGameBtn_Click" ToolTip="Выбрать папку с игрой"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
@@ -395,7 +397,7 @@
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="ModsPathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
-                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="ModsPathInput_TextChanged"/>
+                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="ModsPathInput_TextChanged" LostFocus="ModsPathInput_LostFocus"/>
                                     <Button x:Name="BrowseModsBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseModsBtn_Click" ToolTip="Выбрать папку модов"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
@@ -520,7 +522,7 @@
                             <Path Data="{StaticResource IconRefreshGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock x:Name="UpdateTitle" Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="UpdateVersionText" Text="v2.1.22" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
+                        <TextBlock x:Name="UpdateVersionText" Text="" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
                         <TextBlock x:Name="UpdateDesc" Text="Нажмите «Скачать», чтобы получить новую версию" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
 
                         <!-- Update Progress -->

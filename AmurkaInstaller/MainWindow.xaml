@@ -88,7 +88,7 @@
                                    FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Border Background="#1800FF88" BorderBrush="#3000FF88" BorderThickness="1" CornerRadius="6" Padding="8,3" Margin="0,0,8,0">
-                                <TextBlock x:Name="VersionBadgeText" Text="Версия: v2.1.26" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                <TextBlock x:Name="VersionBadgeText" Text="Версия: v2.1.28" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
                             </Border>
                             <Border Background="#186C5CE7" BorderBrush="#306C5CE7" BorderThickness="1" CornerRadius="6" Padding="8,3">
                                 <TextBlock Text="Сервер: 85.88.179.207:7004" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PurpleBrush}"/>
@@ -196,10 +196,10 @@
                             <Path Data="{StaticResource IconCheckGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <TextBlock Text="Установка успешно завершена!" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="FinishedTitleText" Text="Установка успешно завершена!" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
                         <TextBlock x:Name="FinishedDescText" Text="AMURKA PVE Launcher готов к работе и запуску." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,24"/>
 
-                        <Border Background="#0E121A" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,24">
+                        <Border x:Name="InstalledPathCard" Background="#0E121A" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,24">
                             <StackPanel>
                                 <TextBlock Text="Папка установки:" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 <TextBlock x:Name="InstalledPathText" Text="" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,0"/>

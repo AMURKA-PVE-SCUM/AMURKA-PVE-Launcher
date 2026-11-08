@@ -128,36 +128,33 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        _discordRpcService.Initialize();
-        AppVersionText.Text = $" · v{_updateService.CurrentVersion}";
+        // Неблокирующая фоновая инициализация Discord RPC
+        _ = Task.Run(() => _discordRpcService.Initialize());
+        AppVersionText.Text = _updateService.CurrentVersion;
 
         _config = _configService.LoadConfig();
 
-        // Автопоиск игры, если путь не задан или неверен
-        string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
-        if (exe == null)
-        {
-            string? detected = _scumDetectionService.AutoDetectScum();
-            if (!string.IsNullOrEmpty(detected))
-            {
-                _config.GamePath = detected;
-            }
-        }
-
-        // Автоопределение папки модов строго по правилу SteamLibrary\...\SCUM\SCUM\Content\Paks\~mods
-        if (string.IsNullOrWhiteSpace(_config.ModsPath) && !string.IsNullOrWhiteSpace(_config.GamePath))
-        {
-            _config.ModsPath = _scumDetectionService.GetModsPath(_config.GamePath);
-        }
+        // Неблокирующий поиск и гарантированная привязка путей игры и модов (в фоновом пуле)
+        string? gamePath = _config.GamePath;
+        string? modsPath = _config.ModsPath;
+        bool pathsChanged = await Task.Run(() => _scumDetectionService.ResolveAndEnsurePaths(ref gamePath, ref modsPath));
+        _config.GamePath = gamePath ?? string.Empty;
+        _config.ModsPath = modsPath ?? string.Empty;
 
         UpdatePathsUi();
         UpdateModeButtonsUi();
 
-        SaveCurrentConfig();
+        if (pathsChanged)
+        {
+            SaveCurrentConfig();
+        }
 
-        await LoadModsAsync();
+        // Параллельная загрузка списка модов и проверка обновлений для максимальной скорости старта
+        await Task.WhenAll(
+            LoadModsAsync(),
+            CheckForUpdatesAsync()
+        );
 
-        await CheckForUpdatesAsync();
         _updateCheckTimer.Start();
 
         _ = PingVerificationAsync();
@@ -181,8 +178,15 @@ public partial class MainWindow : Window
 
     private void UpdatePathsUi()
     {
-        GamePathInput.Text = _config.GamePath;
-        ModsPathInput.Text = _config.ModsPath;
+        if (GamePathInput.Text != _config.GamePath)
+        {
+            GamePathInput.Text = _config.GamePath;
+        }
+
+        if (ModsPathInput.Text != _config.ModsPath)
+        {
+            ModsPathInput.Text = _config.ModsPath;
+        }
 
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
         bool found = exe != null;
@@ -272,7 +276,9 @@ public partial class MainWindow : Window
 
         var missingOrOutdated = _availableMods.Where(m => !m.IsInstalled).ToList();
         var untracked = _modManagerService.FindUntrackedOrObsoleteFiles(_availableMods, _config.ModsPath);
-        int extraCount = _obsoleteMods.Count + untracked.Count;
+        var extraFileNames = new HashSet<string>(_obsoleteMods.Select(m => m.Name), StringComparer.OrdinalIgnoreCase);
+        foreach (var file in untracked) extraFileNames.Add(file);
+        int extraCount = extraFileNames.Count;
 
         if (missingOrOutdated.Count == 0 && extraCount == 0)
         {
@@ -462,15 +468,19 @@ public partial class MainWindow : Window
     private static bool IsGameRunning()
     {
         string[] names = ["SCUM", "SCUM-Win64-Shipping", "SCUM_Launcher"];
-        var processes = Process.GetProcesses();
-        try
+        foreach (var name in names)
         {
-            return processes.Any(p => names.Any(n => p.ProcessName.Equals(n, StringComparison.OrdinalIgnoreCase)));
+            var procs = Process.GetProcessesByName(name);
+            try
+            {
+                if (procs.Length > 0) return true;
+            }
+            finally
+            {
+                foreach (var p in procs) p.Dispose();
+            }
         }
-        finally
-        {
-            foreach (var process in processes) process.Dispose();
-        }
+        return false;
     }
 
     private void SetModControlsEnabled(bool enabled)
@@ -723,6 +733,16 @@ public partial class MainWindow : Window
             }
         }
 
+        string? gamePath = _config.GamePath;
+        string? modsPath = _config.ModsPath;
+        if (_scumDetectionService.ResolveAndEnsurePaths(ref gamePath, ref modsPath))
+        {
+            _config.GamePath = gamePath ?? string.Empty;
+            _config.ModsPath = modsPath ?? string.Empty;
+            UpdatePathsUi();
+            SaveCurrentConfig();
+        }
+
         string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
         if (exe == null)
         {
@@ -769,6 +789,16 @@ public partial class MainWindow : Window
                 this);
             ShowToast("Закройте SCUM перед скачиванием модов", isError: true);
             return;
+        }
+
+        string? gamePath = _config.GamePath;
+        string? modsPath = _config.ModsPath;
+        if (_scumDetectionService.ResolveAndEnsurePaths(ref gamePath, ref modsPath))
+        {
+            _config.GamePath = gamePath ?? string.Empty;
+            _config.ModsPath = modsPath ?? string.Empty;
+            UpdatePathsUi();
+            SaveCurrentConfig();
         }
 
         if (!await LoadModsAsync()) return;
@@ -854,9 +884,19 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true)
         {
-            _config.GamePath = dialog.FolderName;
-            // Пересчитываем путь модов строго по правилу
-            _config.ModsPath = _scumDetectionService.GetModsPath(_config.GamePath);
+            string chosen = ScumDetectionService.NormalizeGameRoot(dialog.FolderName);
+            _config.GamePath = chosen;
+            _config.ModsPath = _scumDetectionService.GetModsPath(chosen);
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_config.ModsPath) && !Directory.Exists(_config.ModsPath))
+                {
+                    Directory.CreateDirectory(_config.ModsPath);
+                }
+            }
+            catch { }
+
             UpdatePathsUi();
             SaveCurrentConfig();
             _ = LoadModsAsync();
@@ -870,8 +910,45 @@ public partial class MainWindow : Window
 
         _config.GamePath = val;
         _config.ModsPath = _scumDetectionService.GetModsPath(val);
-        UpdatePathsUi();
+        UpdateGameStatusOnly();
         SaveCurrentConfig();
+    }
+
+    private void GamePathInput_LostFocus(object sender, RoutedEventArgs e)
+    {
+        string val = GamePathInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        string normalized = ScumDetectionService.NormalizeGameRoot(val);
+        if (!string.Equals(normalized, _config.GamePath, StringComparison.OrdinalIgnoreCase))
+        {
+            _config.GamePath = normalized;
+            _config.ModsPath = _scumDetectionService.GetModsPath(normalized);
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_config.ModsPath) && !Directory.Exists(_config.ModsPath))
+                {
+                    Directory.CreateDirectory(_config.ModsPath);
+                }
+            }
+            catch { }
+
+            UpdatePathsUi();
+            SaveCurrentConfig();
+            _ = LoadModsAsync();
+        }
+    }
+
+    private void UpdateGameStatusOnly()
+    {
+        string? exe = _scumDetectionService.FindScumExe(_config.GamePath);
+        bool found = exe != null;
+
+        GameStatusDot.Fill = (Brush)FindResource(found ? "AccentBrush" : "DangerBrush");
+        GameStatusText.Text = found
+            ? "SCUM найден"
+            : (string.IsNullOrWhiteSpace(_config.GamePath) ? "Укажите путь к SCUM" : "SCUM не найден");
     }
 
     private async void BrowseModsBtn_Click(object sender, RoutedEventArgs e)
@@ -889,6 +966,16 @@ public partial class MainWindow : Window
             {
                 chosen = Path.Combine(chosen, "~mods");
             }
+
+            try
+            {
+                if (!Directory.Exists(chosen))
+                {
+                    Directory.CreateDirectory(chosen);
+                }
+            }
+            catch { }
+
             _config.ModsPath = chosen;
             ModsPathInput.Text = _config.ModsPath;
             SaveCurrentConfig();
@@ -908,6 +995,34 @@ public partial class MainWindow : Window
         _installedMods = _modManagerService.ScanInstalledMods(_config.ModsPath);
         UpdateCounts();
         RefreshNotifyBanner();
+    }
+
+    private async void ModsPathInput_LostFocus(object sender, RoutedEventArgs e)
+    {
+        string val = ModsPathInput.Text.Trim().TrimEnd('\\', '/');
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        if (!val.EndsWith("~mods", StringComparison.OrdinalIgnoreCase))
+        {
+            val = Path.Combine(val, "~mods");
+        }
+
+        try
+        {
+            if (!Directory.Exists(val))
+            {
+                Directory.CreateDirectory(val);
+            }
+        }
+        catch { }
+
+        if (val != _config.ModsPath)
+        {
+            _config.ModsPath = val;
+            ModsPathInput.Text = val;
+            SaveCurrentConfig();
+            await LoadModsAsync();
+        }
     }
 
     private void OpenLink_Click(object sender, RoutedEventArgs e)
@@ -945,6 +1060,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        string? gamePath = _config.GamePath;
+        string? modsPath = _config.ModsPath;
+        if (_scumDetectionService.ResolveAndEnsurePaths(ref gamePath, ref modsPath))
+        {
+            _config.GamePath = gamePath ?? string.Empty;
+            _config.ModsPath = modsPath ?? string.Empty;
+            UpdatePathsUi();
+            SaveCurrentConfig();
+        }
+
         if (!await LoadModsAsync()) return;
         await DownloadModsListAsync(_availableMods);
     }
@@ -956,12 +1081,26 @@ public partial class MainWindow : Window
 
     // --- Update System Handlers ---
 
-    private void UpdateStatusDot_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private async void UpdateStatusDot_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_currentUpdate != null)
         {
             _updateDismissed = false;
             UpdateOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ShowToast("Проверка обновлений лаунчера...");
+            await CheckForUpdatesAsync();
+            if (_currentUpdate != null)
+            {
+                _updateDismissed = false;
+                UpdateOverlay.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                ShowToast("У вас установлена актуальная версия!");
+            }
         }
     }
 

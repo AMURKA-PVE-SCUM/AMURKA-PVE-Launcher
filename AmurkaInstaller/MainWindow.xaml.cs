@@ -11,7 +11,7 @@ namespace AmurkaInstaller;
 
 public partial class MainWindow : Window
 {
-    private const string AppVersion = "2.1.27";
+    private const string AppVersion = "2.1.28";
     private readonly bool _isUpdate;
     private readonly bool _isUninstall;
     private string _targetDir = string.Empty;
@@ -55,7 +55,7 @@ public partial class MainWindow : Window
 
     private string DetermineDefaultInstallPath()
     {
-        // 1. Проверяем, есть ли уже установленный путь в реестре
+        // 1. Проверяем, есть ли уже установленный путь в реестре (основной ключ или ключ удаления)
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\AMURKA PVE Launcher");
@@ -69,15 +69,36 @@ public partial class MainWindow : Window
         }
         catch { }
 
-        // 2. Для первой чистой установки: безопасный диск с играми (D:\, E:\)
-        // НИ В КОЕМ СЛУЧАЕ НЕ C:\Windows и НЕ C:\Program Files во избежание проблем с UAC при загрузке модов!
-        if (Directory.Exists(@"D:\"))
+        try
         {
-            return @"D:\Games\AMURKA PVE Launcher";
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher");
+            if (key?.GetValue("InstallLocation") is string regPath && !string.IsNullOrWhiteSpace(regPath))
+            {
+                if (Directory.Exists(regPath) || _isUpdate)
+                {
+                    return regPath;
+                }
+            }
         }
-        if (Directory.Exists(@"E:\"))
+        catch { }
+
+        // 2. Для первой чистой установки: безопасный диск с играми (D:\, E:\, G:\, и т.д.)
+        // Проверяем реальную готовность диска (фиксированный тип, не CD-ROM/DVD, достаточно места)
+        string[] candidateLetters = ["D:\\", "E:\\", "G:\\", "F:\\"];
+        foreach (var letter in candidateLetters)
         {
-            return @"E:\Games\AMURKA PVE Launcher";
+            try
+            {
+                if (Directory.Exists(letter))
+                {
+                    var drive = new DriveInfo(letter);
+                    if (drive.IsReady && drive.DriveType == DriveType.Fixed && drive.AvailableFreeSpace > 1024L * 1024 * 1024)
+                    {
+                        return Path.Combine(drive.RootDirectory.FullName, "Games", "AMURKA PVE Launcher");
+                    }
+                }
+            }
+            catch { }
         }
 
         // 3. Безопасный изолированный каталог пользователя
@@ -134,12 +155,27 @@ public partial class MainWindow : Window
 
     private async Task WaitForLauncherExitAsync()
     {
-        for (int i = 0; i < 15; i++)
+        for (int i = 0; i < 10; i++)
         {
             var processes = Process.GetProcessesByName("AMURKA PVE Launcher");
             if (processes.Length == 0)
-                break;
-            await Task.Delay(400);
+                return;
+            await Task.Delay(300);
+        }
+
+        // Если процесс лаунчера завис или не закрылся сам — принудительно завершаем дерево процессов
+        foreach (var proc in Process.GetProcessesByName("AMURKA PVE Launcher"))
+        {
+            try
+            {
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(2000);
+            }
+            catch { }
+            finally
+            {
+                proc.Dispose();
+            }
         }
     }
 
@@ -429,37 +465,109 @@ public partial class MainWindow : Window
         catch { }
     }
 
-    private void ConfirmUninstallBtn_Click(object sender, RoutedEventArgs e)
+    private async void ConfirmUninstallBtn_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            // 1. Удаляем ярлыки
-            string desktopShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "AMURKA PVE Launcher.lnk");
-            if (File.Exists(desktopShortcut)) File.Delete(desktopShortcut);
+            UninstallView.Visibility = Visibility.Collapsed;
+            InstallingView.Visibility = Visibility.Visible;
+            InstallTitleText.Text = "Удаление AMURKA PVE Launcher...";
+            SetProgress(15, "Завершение активных процессов...");
 
-            string startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", "AMURKA PVE Launcher");
-            if (Directory.Exists(startMenuDir)) Directory.Delete(startMenuDir, true);
-
-            // 2. Удаляем реестр
-            Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher", false);
-            Registry.CurrentUser.DeleteSubKeyTree(@"Software\AMURKA PVE Launcher", false);
-
-            // 3. Отложенное удаление папки через cmd после выхода uninstall.exe
-            string currentDir = AppDomain.CurrentDomain.BaseDirectory;
-            Process.Start(new ProcessStartInfo
+            await Task.Run(() =>
             {
-                FileName = "cmd.exe",
-                Arguments = $"/c timeout /t 1 /nobreak >nul & rd /s /q \"{currentDir}\"",
-                CreateNoWindow = true,
-                UseShellExecute = false
+                foreach (var proc in Process.GetProcessesByName("AMURKA PVE Launcher"))
+                {
+                    try { proc.Kill(entireProcessTree: true); proc.WaitForExit(2000); } catch { }
+                }
             });
 
-            MessageBox.Show("AMURKA PVE Launcher успешно удален с вашего компьютера.", "AMURKA PVE Launcher", MessageBoxButton.OK, MessageBoxImage.Information);
-            Close();
+            SetProgress(40, "Удаление ярлыков и меню «Пуск»...");
+            string desktopShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "AMURKA PVE Launcher.lnk");
+            if (File.Exists(desktopShortcut))
+            {
+                try { File.Delete(desktopShortcut); } catch { }
+            }
+
+            string startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", "AMURKA PVE Launcher");
+            if (Directory.Exists(startMenuDir))
+            {
+                try { Directory.Delete(startMenuDir, true); } catch { }
+            }
+
+            SetProgress(65, "Очистка записей в реестре Windows...");
+            try
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\AMURKA-PVE-Launcher", false);
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\AMURKA PVE Launcher", false);
+            }
+            catch { }
+
+            SetProgress(85, "Очистка каталога программы...");
+            string? installDir = null;
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\AMURKA PVE Launcher");
+                installDir = key?.GetValue("InstallLocation") as string;
+            }
+            catch { }
+
+            if (string.IsNullOrWhiteSpace(installDir) || !Directory.Exists(installDir))
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+                if (File.Exists(Path.Combine(baseDir, "AMURKA PVE Launcher.exe")))
+                {
+                    installDir = baseDir;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(installDir) && Directory.Exists(installDir))
+            {
+                int currentPid = Environment.ProcessId;
+                string scriptPath = Path.Combine(Path.GetTempPath(), $"amurka-uninstall-{Guid.NewGuid():N}.bat");
+                string batContent = $@"@echo off
+chcp 65001 >nul
+:wait_exit
+tasklist /fi ""PID eq {currentPid}"" 2>nul | find ""{currentPid}"" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_exit
+)
+timeout /t 1 /nobreak >nul
+if exist ""{installDir}"" (
+    rd /s /q ""{installDir}""
+)
+del ""%~f0""
+";
+                try
+                {
+                    File.WriteAllText(scriptPath, batContent, System.Text.Encoding.GetEncoding(866));
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c \"{scriptPath}\"",
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        UseShellExecute = false
+                    });
+                }
+                catch { }
+            }
+
+            SetProgress(100, "Удаление успешно завершено.");
+            await Task.Delay(400);
+
+            InstallingView.Visibility = Visibility.Collapsed;
+            FinishedTitleText.Text = "Удаление завершено";
+            FinishedDescText.Text = "AMURKA PVE Launcher успешно удален с вашего компьютера.";
+            InstalledPathCard.Visibility = Visibility.Collapsed;
+            LaunchAppBtn.Visibility = Visibility.Collapsed;
+            FinishedView.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            Close();
         }
     }
 

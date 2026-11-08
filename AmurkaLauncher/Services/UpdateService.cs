@@ -65,7 +65,7 @@ public partial class UpdateService
         {
             if (!string.IsNullOrEmpty(VersionOverride)) return VersionOverride;
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.27";
+            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.28";
         }
     }
 

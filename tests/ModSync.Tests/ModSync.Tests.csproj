@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Simulate the previously installed launcher for the optional release check. -->
@@ -13,5 +13,6 @@
     <Compile Include="../../AmurkaLauncher/Models/ModCategory.cs" Link="ModCategory.cs" />
     <Compile Include="../../AmurkaLauncher/Services/UpdateService.cs" Link="UpdateService.cs" />
     <Compile Include="../../AmurkaLauncher/Models/UpdateInfo.cs" Link="UpdateInfo.cs" />
+    <Compile Include="../../AmurkaLauncher/Services/ScumDetectionService.cs" Link="ScumDetectionService.cs" />
   </ItemGroup>
 </Project>

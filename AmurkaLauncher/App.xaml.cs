@@ -13,7 +13,7 @@ namespace AmurkaLauncher;
 /// </summary>
 public partial class App : Application
 {
-    private const string MutexName = @"Global\AmurkaLauncher_SingleInstance_Mutex_DOMO";
+    private const string MutexName = @"Local\AmurkaLauncher_SingleInstance_Mutex_DOMO";
     private static Mutex? _singleInstanceMutex;
     private static bool _hasHandle;
 
@@ -45,14 +45,59 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        _singleInstanceMutex = new Mutex(true, MutexName, out _hasHandle);
+        // 1. Инициализация глобальных обработчиков ошибок в самом начале работы
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            LogCrash("AppDomain.UnhandledException", args.ExceptionObject as Exception);
+        };
+
+        DispatcherUnhandledException += (s, args) =>
+        {
+            LogCrash("DispatcherUnhandledException", args.Exception);
+            args.Handled = true;
+            try
+            {
+                AmurkaMessageBox.Show(
+                    $"Произошла непредвиденная ошибка при работе программы:\n\n{args.Exception?.Message}\n\nПодробности записаны в crash.log",
+                    "AMURKA PVE Launcher",
+                    AmurkaDialogButtons.Ok,
+                    AmurkaDialogIcon.Error
+                );
+            }
+            catch
+            {
+                MessageBox.Show(
+                    $"Произошла непредвиденная ошибка:\n{args.Exception?.Message}\n\nПодробности записаны в crash.log",
+                    "AMURKA PVE Launcher",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+        };
+
+        TaskScheduler.UnobservedTaskException += (s, args) =>
+        {
+            LogCrash("TaskScheduler.UnobservedTaskException", args.Exception);
+            args.SetObserved();
+        };
+
+        // 2. Безопасная проверка единственного экземпляра
+        try
+        {
+            _singleInstanceMutex = new Mutex(true, MutexName, out _hasHandle);
+        }
+        catch (Exception ex)
+        {
+            LogCrash("MutexInitialization", ex);
+            _hasHandle = true;
+        }
 
         if (!_hasHandle)
         {
             // Уведомляем уже запущенный экземпляр развернуть окно
             PostMessage((IntPtr)HWND_BROADCAST, WmShowLauncher, IntPtr.Zero, IntPtr.Zero);
 
-            // Дополнительно ищем окно процесса и выводим на передний план напрямую
+            bool windowActivated = false;
             try
             {
                 var current = Process.GetCurrentProcess();
@@ -63,38 +108,50 @@ public partial class App : Application
                 {
                     ShowWindowAsync(existing.MainWindowHandle, SW_RESTORE);
                     SetForegroundWindow(existing.MainWindowHandle);
+                    windowActivated = true;
                 }
             }
             catch { }
+
+            if (!windowActivated)
+            {
+                // Окно не найдено или завис старый фоновый процесс
+                var answer = MessageBox.Show(
+                    "Обнаружен предыдущий или зависший процесс AMURKA PVE Launcher в памяти.\n\nЗавершить его и запустить лаунчер заново?",
+                    "AMURKA PVE Launcher",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question
+                );
+
+                if (answer == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        var current = Process.GetCurrentProcess();
+                        foreach (var p in Process.GetProcessesByName(current.ProcessName))
+                        {
+                            if (p.Id != current.Id)
+                            {
+                                p.Kill(entireProcessTree: true);
+                                p.WaitForExit(1500);
+                            }
+                        }
+
+                        base.OnStartup(e);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogCrash("KillExistingProcess", ex);
+                    }
+                }
+            }
 
             Shutdown();
             return;
         }
 
         base.OnStartup(e);
-
-        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
-        {
-            LogCrash("AppDomain.UnhandledException", args.ExceptionObject as Exception);
-        };
-
-        DispatcherUnhandledException += (s, args) =>
-        {
-            LogCrash("DispatcherUnhandledException", args.Exception);
-            args.Handled = true;
-            AmurkaMessageBox.Show(
-                $"Произошла ошибка при работе программы:\n\n{args.Exception?.Message}\n\nПодробности записаны в crash.log",
-                "AMURKA PVE Launcher",
-                AmurkaDialogButtons.Ok,
-                AmurkaDialogIcon.Error
-            );
-        };
-
-        TaskScheduler.UnobservedTaskException += (s, args) =>
-        {
-            LogCrash("TaskScheduler.UnobservedTaskException", args.Exception);
-            args.SetObserved();
-        };
     }
 
     protected override void OnExit(ExitEventArgs e)

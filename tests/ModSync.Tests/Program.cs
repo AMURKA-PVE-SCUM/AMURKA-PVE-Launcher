@@ -231,6 +231,66 @@ try
     string fastPath = await updateDownloadService.DownloadUpdateAsync(updateInfo, (_, _, _) => { });
     Check(resumableHandler.Count == handlerCountBefore && fastPath == downloadedPath, "verified existing installer returns without network re-download");
 
+    // 3. SCUM Detection and Path Resolution Tests
+    var detector = new ScumDetectionService();
+
+    // Normalization permutations
+    string mockBase = @"D:\Games\SteamLibrary\steamapps\common\SCUM";
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase) == mockBase, "canonical SCUM root unchanged");
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase + @"\SCUM") == mockBase, "inner SCUM folder normalizes to game root");
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase + @"\SCUM\Binaries\Win64") == mockBase, "Binaries Win64 normalizes to game root");
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase + @"\SCUM\Binaries\Win64\SCUM.exe") == mockBase, "SCUM.exe file path normalizes to game root");
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase + @"\SCUM\Content\Paks") == mockBase, "Content Paks normalizes to game root");
+    Check(ScumDetectionService.NormalizeGameRoot(mockBase + @"\SCUM\Content\Paks\~mods") == mockBase, "~mods folder normalizes to game root");
+
+    // Library VDF parsing and prioritization
+    string sampleVdf = @"
+""libraryfolders""
+{
+    ""0""
+    {
+        ""path"" ""C:\\Steam""
+        ""apps"" { ""228980"" ""100"" }
+    }
+    ""1""
+    {
+        ""path"" """ + root.Replace(@"\", @"\\") + @"\\SteamLib""
+        ""apps"" { ""513710"" ""81161598864"" }
+    }
+}";
+    string mockSteamLib = Path.Combine(root, "SteamLib");
+    Directory.CreateDirectory(mockSteamLib);
+    var parsedLibs = ScumDetectionService.ParseSteamLibraries(sampleVdf);
+    Check(parsedLibs.Count > 0 && parsedLibs[0].Equals(mockSteamLib, StringComparison.OrdinalIgnoreCase),
+        "libraryfolders.vdf prioritizes library hosting SCUM AppID 513710");
+
+    // Dynamic GetModsPath layout check
+    string mockGameRootNested = Path.Combine(root, "mockGameNested");
+    string nestedPaksDir = Path.Combine(mockGameRootNested, "SCUM", "Content", "Paks");
+    Directory.CreateDirectory(nestedPaksDir);
+    Check(detector.GetModsPath(mockGameRootNested) == Path.Combine(nestedPaksDir, "~mods"),
+        "nested Unreal Engine SCUM Content Paks layout correctly detected");
+
+    string mockGameRootFlat = Path.Combine(root, "mockGameFlat");
+    string flatPaksDir = Path.Combine(mockGameRootFlat, "Content", "Paks");
+    Directory.CreateDirectory(flatPaksDir);
+    Check(detector.GetModsPath(mockGameRootFlat) == Path.Combine(flatPaksDir, "~mods"),
+        "flat Content Paks layout correctly detected");
+
+    // FindScumExe test
+    string fakeExeDir = Path.Combine(mockGameRootNested, "SCUM", "Binaries", "Win64");
+    Directory.CreateDirectory(fakeExeDir);
+    string fakeExe = Path.Combine(fakeExeDir, "SCUM.exe");
+    await File.WriteAllBytesAsync(fakeExe, [0x4D, 0x5A]);
+    Check(detector.FindScumExe(mockGameRootNested) == fakeExe, "FindScumExe locates executable in nested Unreal Engine layout");
+
+    // ResolveAndEnsurePaths test
+    string? resolveGamePath = mockGameRootNested;
+    string? resolveModsPath = @"X:\OldDisk\SCUM\~mods";
+    bool resolved = detector.ResolveAndEnsurePaths(ref resolveGamePath, ref resolveModsPath);
+    Check(resolved && resolveModsPath == Path.Combine(nestedPaksDir, "~mods") && Directory.Exists(resolveModsPath),
+        "ResolveAndEnsurePaths re-aligns mods folder to game disk and ensures physical directory existence");
+
     if (args.Contains("--live"))
     {
         var live = new ModManagerService();
