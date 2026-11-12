@@ -70,7 +70,7 @@
                                         </Ellipse.Effect>
                                     </Ellipse>
                                     <TextBlock Text="v" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock x:Name="AppVersionText" Text="2.1.28" FontSize="9.5" FontWeight="Black" Foreground="{StaticResource AccentBrush}"/>
+                                    <TextBlock x:Name="AppVersionText" Text="2.1.29" FontSize="9.5" FontWeight="Black" Foreground="{StaticResource AccentBrush}"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

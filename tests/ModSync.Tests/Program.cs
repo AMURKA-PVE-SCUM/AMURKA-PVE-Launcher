@@ -138,31 +138,45 @@ try
     int removedUntracked = await service.RemoveObsoleteAndUntrackedModsAsync([mod], untrackedDir);
     Check(removedUntracked == 2 && !File.Exists(Path.Combine(untrackedDir, "rogue_extra.pak")) && !File.Exists(Path.Combine(untrackedDir, "rogue_mod.zip")) && File.Exists(Path.Combine(untrackedDir, mod.Name)), "purge removes only untracked files leaving official repo mods intact");
 
-    var snapshotHandler = new FakeHandler(request =>
-    {
-        if (request.RequestUri!.Host == "raw.githubusercontent.com")
-            return new(HttpStatusCode.NotFound);
-        string json = request.RequestUri!.AbsolutePath.Contains("/commits/")
-            ? "{\"sha\":\"fixed-commit\"}"
-            : "{\"truncated\":false,\"tree\":[{\"path\":\"core/test.pak\",\"type\":\"blob\",\"size\":8,\"sha\":\"" + Hash(updated) + "\"}]}";
-        if (request.RequestUri.AbsolutePath.Contains("/trees/"))
-            Check(request.RequestUri.AbsolutePath.EndsWith("fixed-commit"), "catalog is pinned to the resolved commit");
-        return new(HttpStatusCode.OK) { Content = new StringContent(json) };
-    });
-    var catalogService = new ModManagerService(new HttpClient(snapshotHandler));
-    var catalog = await catalogService.FetchAvailableModsAsync(catalogService.GetDefaultCategories());
-    Check(catalog.Single().DownloadUrl.Contains("/fixed-commit/core/test.pak"), "download URL uses the same immutable commit");
-
     string staticRevision = new string('a', 40);
     var staticHandler = new FakeHandler(request =>
     {
-        Check(request.RequestUri!.Host == "raw.githubusercontent.com", "mod catalog avoids GitHub API entirely");
+        Check(request.RequestUri!.Host == "gitverse.ru", "mod catalog only contacts GitVerse");
+        Check(request.RequestUri.AbsolutePath == "/api/repos/DOMO/amurka-pve-mods/raw/branch/main/mods.json", "catalog uses the public GitVerse raw endpoint");
+        Check(request.Headers.Authorization == null, "players do not need a GitVerse token");
         return new(HttpStatusCode.OK) { Content = new StringContent("{\"schemaVersion\":1,\"revision\":\"" + staticRevision +
             "\",\"files\":[{\"path\":\"core/test.pak\",\"size\":8,\"sha\":\"" + Hash(updated) + "\"}]}") };
     });
     var staticService = new ModManagerService(new HttpClient(staticHandler));
     var staticCatalog = await staticService.FetchAvailableModsAsync(staticService.GetDefaultCategories());
-    Check(staticHandler.Count == 1 && staticCatalog.Single().DownloadUrl.Contains("/" + staticRevision + "/"), "static catalog preserves immutable download URLs");
+    Check(staticHandler.Count == 1 && staticCatalog.Single().DownloadUrl ==
+        $"https://gitverse.ru/api/repos/DOMO/amurka-pve-mods/raw/commit/{staticRevision}/core/test.pak",
+        "GitVerse downloads stay pinned to the catalog commit");
+
+    var missingCatalogHandler = new FakeHandler(_ => new(HttpStatusCode.NotFound));
+    rejected = false;
+    try { await new ModManagerService(new HttpClient(missingCatalogHandler)).FetchAvailableModsAsync(); }
+    catch (InvalidOperationException) { rejected = true; }
+    Check(rejected && missingCatalogHandler.Count == 1, "missing GitVerse catalog fails closed without falling back to GitHub");
+
+    var badCatalogHandler = new FakeHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent("<html>sign in</html>") });
+    rejected = false;
+    try { await new ModManagerService(new HttpClient(badCatalogHandler)).FetchAvailableModsAsync(); }
+    catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "HTML instead of a catalog is reported without accepting a partial mod list");
+
+    var mutableCatalogHandler = new FakeHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(
+        "{\"schemaVersion\":1,\"revision\":\"main\",\"files\":[]}") });
+    rejected = false;
+    try { await new ModManagerService(new HttpClient(mutableCatalogHandler)).FetchAvailableModsAsync(); }
+    catch (InvalidOperationException) { rejected = true; }
+    Check(rejected, "mutable branch names cannot replace an immutable catalog revision");
+
+    var escapedCatalogHandler = new FakeHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(
+        "{\"schemaVersion\":1,\"revision\":\"" + staticRevision +
+        "\",\"files\":[{\"path\":\"core/test mod.pak\",\"size\":8,\"sha\":\"" + Hash(updated) + "\"}]}") });
+    var escapedCatalog = await new ModManagerService(new HttpClient(escapedCatalogHandler)).FetchAvailableModsAsync();
+    Check(escapedCatalog.Single().DownloadUrl.EndsWith("/core/test%20mod.pak"), "GitVerse filenames are URL escaped");
     var noUpdateHandler = new FakeHandler(request =>
     {
         Check(request.RequestUri!.Host == "raw.githubusercontent.com", "up-to-date launcher does not consume API quota");
@@ -298,15 +312,27 @@ try
         var smallest = liveCatalog.MinBy(m => m.Size)!;
         string livePath = Folder("live");
         result = await live.DownloadAllModsAsync([smallest], livePath, (_, _, _, _) => { });
-        Check(result.errors == 0 && smallest.IsInstalled, "live GitHub catalog and real mod content match");
+        Check(result.errors == 0 && smallest.IsInstalled, "live GitVerse catalog and real mod content match");
         Console.WriteLine($"Live catalog: {liveCatalog.Count} files; verified {smallest.Category}/{smallest.Name}.");
+        var largest = liveCatalog.MaxBy(m => m.Size)!;
+        using var rangeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+        rangeClient.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher-Test/2.1.29");
+        using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, largest.DownloadUrl);
+        rangeRequest.Headers.Range = new RangeHeaderValue(0, 255);
+        using var rangeResponse = await rangeClient.SendAsync(rangeRequest, HttpCompletionOption.ResponseHeadersRead);
+        Check(rangeResponse.StatusCode == HttpStatusCode.PartialContent &&
+              rangeResponse.Content.Headers.ContentRange?.From == 0 &&
+              rangeResponse.Content.Headers.ContentRange?.Length == largest.Size,
+              "live GitVerse supports ranged downloads of a large PAK");
+        await using var rangeStream = await rangeResponse.Content.ReadAsStreamAsync();
+        await rangeStream.ReadExactlyAsync(new byte[256]);
     }
     if (args.Contains("--check-release"))
     {
         var updater = new UpdateService();
         var release = await updater.CheckForUpdateAsync();
-        Check(updater.CurrentVersion == "2.1.24" && release?.Version == "2.1.25", "previous launcher detects published 2.1.25 update");
-        Check(release!.DownloadUrl.EndsWith("/v2.1.25/AMURKA-PVE-Launcher-Setup-2.1.25.exe"), "updater resolves the published installer asset");
+        Check(updater.CurrentVersion == "2.1.23" && release?.Version == "2.1.29", "previous launcher detects the GitVerse migration release");
+        Check(release!.DownloadUrl.EndsWith("/v2.1.29/AMURKA-PVE-Launcher-Setup-2.1.29.exe"), "updater resolves the published installer asset");
     }
     Console.WriteLine($"All {checks} checks passed.");
 }

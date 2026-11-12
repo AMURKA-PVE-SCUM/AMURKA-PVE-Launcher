@@ -302,7 +302,7 @@ public partial class MainWindow : Window
         else
         {
             ModsNotifyTitle.Text = "Обнаружены сторонние файлы";
-            ModsNotifyDesc.Text = $"В папке найдено {extraCount} файлов не из репозитория GitHub";
+            ModsNotifyDesc.Text = $"В папке найдено {extraCount} файлов не из репозитория GitVerse";
             SetStatus($"Лишних файлов в папке: {extraCount}", ok: false);
         }
 
@@ -354,8 +354,8 @@ public partial class MainWindow : Window
 
         if (missingOrCorrupt.Count == 0 && untracked.Count == 0)
         {
-            ShowToast("Моды полностью синхронизированы с GitHub");
-            SetStatus("Моды полностью синхронизированы с GitHub");
+            ShowToast("Моды полностью синхронизированы с GitVerse");
+            SetStatus("Моды полностью синхронизированы с GitVerse");
             RefreshNotifyBanner();
             return;
         }
@@ -428,8 +428,8 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowToast("Моды полностью синхронизированы с GitHub");
-                SetStatus("Моды полностью синхронизированы с GitHub");
+                ShowToast("Моды полностью синхронизированы с GitVerse");
+                SetStatus("Моды полностью синхронизированы с GitVerse");
             }
         }
         catch (Exception ex)

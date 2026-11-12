@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 Write-Host "===================================================" -ForegroundColor Cyan
@@ -7,7 +7,7 @@ Write-Host "===================================================" -ForegroundColo
 
 $csproj = [xml](Get-Content "AmurkaLauncher\AmurkaLauncher.csproj")
 $appVersion = $csproj.Project.PropertyGroup.Version
-if ([string]::IsNullOrWhiteSpace($appVersion)) { $appVersion = "2.1.28" }
+if ([string]::IsNullOrWhiteSpace($appVersion)) { $appVersion = "2.1.29" }
 Write-Host "1. Версия сборки: v$appVersion" -ForegroundColor Yellow
 
 Write-Host ""

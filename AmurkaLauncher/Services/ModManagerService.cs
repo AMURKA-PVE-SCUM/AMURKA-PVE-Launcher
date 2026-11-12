@@ -13,7 +13,7 @@ namespace AmurkaLauncher.Services;
 
 public class ModManagerService
 {
-    private const string Repository = "AMURKA-PVE-SCUM/amurka-pve-mods";
+    private const string RepositoryRaw = "https://gitverse.ru/api/repos/DOMO/amurka-pve-mods/raw";
     private const int BufferSize = 81920;
     private const string StateFile = ".amurka-installed.json";
     private readonly HttpClient Client;
@@ -40,36 +40,26 @@ public class ModManagerService
     public async Task<List<ModItem>> FetchAvailableModsAsync(IEnumerable<ModCategory>? categories = null, CancellationToken ct = default)
     {
         var categorySet = (categories ?? GetDefaultCategories()).Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // Static catalog is generated in the mods repository by GitHub Actions.
-        // Client machines never need a token or an API request in normal operation.
-        using var catalogResponse = await Client.GetAsync($"https://raw.githubusercontent.com/{Repository}/main/mods.json?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct);
-        if (catalogResponse.IsSuccessStatusCode)
+        // GitVerse's public raw endpoint works without a player account or API token.
+        // Resolve the catalog on main, then pin every download to its immutable commit.
+        using var response = await Client.GetAsync($"{RepositoryRaw}/branch/main/mods.json?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException("Не удалось загрузить каталог модов с GitVerse. Проверьте подключение и повторите попытку.");
+        try
         {
-            using var catalog = JsonDocument.Parse(await catalogResponse.Content.ReadAsStringAsync(ct));
+            using var catalog = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
             var root = catalog.RootElement;
             if (root.GetProperty("schemaVersion").GetInt32() != 1)
                 throw new InvalidOperationException("Неизвестный формат каталога модов.");
-            string catalogRevision = root.GetProperty("revision").GetString()!;
-            if (catalogRevision.Length != 40 || !catalogRevision.All(Uri.IsHexDigit))
+            string? revision = root.GetProperty("revision").GetString();
+            if (revision == null || revision.Length != 40 || !revision.All(Uri.IsHexDigit))
                 throw new InvalidOperationException("В каталоге модов указана неверная версия сборки.");
-            return ParseModFiles(root.GetProperty("files"), categorySet, catalogRevision);
+            return ParseModFiles(root.GetProperty("files"), categorySet, revision);
         }
-        // Compatibility fallback only while the static catalog has not been set up.
-        if (catalogResponse.StatusCode != HttpStatusCode.NotFound)
-            throw new InvalidOperationException("Не удалось загрузить каталог модов. Проверьте подключение и повторите попытку.");
-        // Pin downloads to the commit used to read the catalog.
-        using var commitResponse = await Client.GetAsync($"https://api.github.com/repos/{Repository}/commits/main", ct);
-        if (commitResponse.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
-            throw new InvalidOperationException("GitHub временно ограничил запросы. Статический каталог модов ещё не доступен. Повторите проверку позже.");
-        commitResponse.EnsureSuccessStatusCode();
-        using var commit = JsonDocument.Parse(await commitResponse.Content.ReadAsStringAsync(ct));
-        string revision = commit.RootElement.GetProperty("sha").GetString()!;
-        using var response = await Client.GetAsync($"https://api.github.com/repos/{Repository}/git/trees/{revision}?recursive=1", ct);
-        response.EnsureSuccessStatusCode();
-        using var tree = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        if (tree.RootElement.GetProperty("truncated").GetBoolean())
-            throw new InvalidOperationException("GitHub вернул неполный список модов. Синхронизация остановлена.");
-        return ParseModFiles(tree.RootElement.GetProperty("tree"), categorySet, revision);
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("GitVerse вернул некорректный каталог модов. Повторите проверку позже.", ex);
+        }
     }
 
     private static List<ModItem> ParseModFiles(JsonElement files, HashSet<string> categorySet, string revision)
@@ -89,7 +79,7 @@ public class ModManagerService
             {
                 Name = parts[1], Category = parts[0], Size = size,
                 Sha = sha,
-                DownloadUrl = $"https://raw.githubusercontent.com/{Repository}/{revision}/{Uri.EscapeDataString(parts[0])}/{Uri.EscapeDataString(parts[1])}"
+                DownloadUrl = $"{RepositoryRaw}/commit/{revision}/{Uri.EscapeDataString(parts[0])}/{Uri.EscapeDataString(parts[1])}"
             });
         }
         if (result.Count == 0) throw new InvalidOperationException("В репозитории не найдены моды. Синхронизация остановлена.");
