@@ -1,10 +1,12 @@
 using System.IO;
 using System.Text.Json;
+using AmurkaLauncher.Core.Serialization;
+using AmurkaLauncher.Infrastructure.Abstractions;
 using AmurkaLauncher.Models;
 
 namespace AmurkaLauncher.Services;
 
-public class ConfigService
+public sealed class ConfigService : IConfigRepository
 {
     private static readonly string PrimaryPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -18,12 +20,6 @@ public class ConfigService
         "config.json"
     );
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
     public LauncherConfig LoadConfig()
     {
         string[] paths = [PrimaryPath, BackupPath];
@@ -34,14 +30,14 @@ public class ConfigService
                 if (File.Exists(p))
                 {
                     string json = File.ReadAllText(p);
-                    var cfg = JsonSerializer.Deserialize<LauncherConfig>(json, JsonOptions);
+                    var cfg = JsonSerializer.Deserialize(json, LauncherJsonContext.Default.LauncherConfig);
                     if (cfg != null)
                     {
                         return cfg;
                     }
                 }
             }
-            catch
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
             {
                 // Ignore and try next path
             }
@@ -53,22 +49,17 @@ public class ConfigService
     public void SaveConfig(LauncherConfig config)
     {
         string[] paths = [PrimaryPath, BackupPath];
-        string json = JsonSerializer.Serialize(config, JsonOptions);
+        string json = JsonSerializer.Serialize(config, LauncherJsonContext.Default.LauncherConfig);
 
         foreach (var p in paths)
         {
             try
             {
-                var dir = Path.GetDirectoryName(p);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-                File.WriteAllText(p, json);
+                Amurka.Shared.IO.AtomicFileStorage.WriteAllTextAtomic(p, json);
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Best effort saving
+                // Best effort saving (backup path covers failure on primary or vice versa)
             }
         }
     }

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-2.1.27-00FF88?style=for-the-badge&logo=github)
+![Version](https://img.shields.io/badge/version-3.0.0-00FF88?style=for-the-badge&logo=github)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue?style=for-the-badge&logo=windows)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20LTS%20WPF-512BD4?style=for-the-badge&logo=dotnet)
 ![SCUM Server](https://img.shields.io/badge/Server-85.88.179.207%3A7004-orange?style=for-the-badge)
@@ -18,7 +18,7 @@
 ## ⚡ Особенности
 
 - 🎮 **Автоматическое обнаружение игры**: Мгновенно находит путь установки SCUM через системный реестр Windows и библиотеки Steam (`libraryfolders.vdf`, `appmanifest_513710.acf`).
-- 📦 **Синхронизация модов в 1 клик**: Загрузка актуального набора модификаций напрямую из репозитория GitVerse ([DOMO/amurka-pve-mods](https://gitverse.ru/DOMO/amurka-pve-mods)) с поддержкой докачки и проверкой контрольных сумм `.pak` и `.sig`.
+- 📦 **Синхронизация модов в 1 клик**: Загрузка актуального набора модификаций напрямую из репозитория GitHub ([amurka-pve-mods](https://github.com/AMURKA-PVE-SCUM/amurka-pve-mods)) с поддержкой докачки, многопоточности и подписей `.sig`.
 - 🛡️ **Безопасная изоляция модов**: Установка и удаление файлов производятся **строго** в каталог `SCUM\SCUM\Content\Paks\~mods`, исключая повреждение файлов оригинальной игры.
 - ⚙️ **Гибкий выбор графического API**: Удобный запуск игры в режимах **DirectX 11**, **DirectX 12** или **Vulkan** с оптимизированными аргументами (`-nobattleye`, `-skipfilestreamingchecks`, `-nohmd`, `-nosplash`).
 - 🔄 **Автообновление**: Встроенная система фоновой проверки и безопасного обновления лаунчера через официальные GitHub Releases.
@@ -32,7 +32,7 @@
 
 ### 1. Скачивание и установка
 1. Перейдите в раздел [**Releases**](https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest).
-2. Скачайте последнюю версию инсталлятора: `AMURKA-PVE-Launcher-Setup-2.1.29.exe`.
+2. Скачайте последнюю версию инсталлятора: `AMURKA-PVE-Launcher-Setup-3.0.0.exe`.
 3. Запустите установщик. Программа автоматически создаст удобные ярлыки на **Рабочем столе** и в **меню «Пуск»**.
 
 ### 2. Запуск и настройка
@@ -54,17 +54,14 @@
 
 ### Обновление модов для игроков
 
-Замените `.pak` и соответствующий `.sig` в репозитории
-[DOMO/amurka-pve-mods](https://gitverse.ru/DOMO/amurka-pve-mods), в ветке `main`.
-Связанные файлы публикуйте одним коммитом, затем обновите `mods.json`:
-[инструкция и утилита каталога](tools/mod-catalog/README.md).
-
-С версии 2.1.29 каталог и сами моды скачиваются с публичных raw-адресов GitVerse.
-Игрокам не нужны учётная запись GitVerse или API-токен. Каталог фиксирует полный
-SHA коммита, а каждый файл проверяется по размеру и Git blob SHA-1. Файлы
-скачиваются из одного неизменяемого коммита; обновления прежнего размера тоже
-обнаруживаются. При смене хостинга уже проверенные файлы не скачиваются заново.
-Обновления самого лаунчера по-прежнему публикуются в GitHub Releases.
+Замените `.pak` и соответствующий `.sig` в нужной категории репозитория
+`AMURKA-PVE-SCUM/amurka-pve-mods`, в ветке `main`. Связанные файлы публикуйте
+одним коммитом, чтобы игроки получали согласованную версию. Имя файла менять
+не нужно: лаунчер сравнивает содержимое по Git blob SHA-1, включая обновления
+с прежним размером файла. С версии 2.1.24 клиент читает статический `mods.json`,
+а проверку версии лаунчера начинает со статического `dist/launcher.json`.
+Обычные проверки не расходуют лимит GitHub API. Генерация каталога настраивается
+в репозитории модов отдельно: [инструкция и workflow](tools/mod-catalog/README.md).
 
 Лаунчер проверяет моды при открытии, раз в пять минут, перед скачиванием и
 перед запуском игры. Баннер учитывает обязательные и выбранные категории.
@@ -90,56 +87,39 @@ SHA коммита, а каждый файл проверяется по раз�
 Git SHA-1 здесь служит идентификатором версии и проверкой содержимого, а не
 цифровой подписью издателя.
 
-Проверки синхронизации без внешних тестовых пакетов:
+Автоматические тесты (xUnit + Coverlet):
 
 ```powershell
-dotnet run --project tests/ModSync.Tests -c Release
-# Дополнительно: настоящий каталог GitVerse и скачивание самого маленького файла
-dotnet run --project tests/ModSync.Tests -c Release -- --live
+dotnet test AmurkaLauncher.sln -c Release /p:TreatWarningsAsErrors=true
 ```
 
 ### Требования
 - **ОС**: Windows 10 / Windows 11 (x64)
 - **SDK**: [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) или новее
 - **IDE**: Visual Studio 2022 (с компонентом «Разработка классических приложений .NET») или JetBrains Rider / VS Code
-- **NSIS**: [Nullsoft Scriptable Install System 3.x](https://nsis.sourceforge.io/) (для сборки `.exe` инсталлятора)
 
 ### Структура проекта
 ```
 amurka-launcher/
+├── Directory.Build.props       # Единые свойства сборки (.NET 8, C# 12, Analyzers)
+├── .editorconfig               # Правила статического анализа (CA/IDE)
 ├── AmurkaLauncher.sln          # Файл решения Visual Studio
-├── AmurkaLauncher/             # Исходный код C# .NET 8 WPF
-│   ├── Controls/               # Кастомные элементы UI (ParticleCanvas)
-│   ├── Models/                 # Модели данных (конфиг, моды, обновления)
-│   ├── Services/               # Бизнес-логика:
-│   │   ├── ScumDetectionService.cs       # Автопоиск SCUM и путей ~mods
-│   │   ├── ModManagerService.cs         # Загрузка и удаление модов с GitVerse
-│   │   ├── GameLauncherService.cs       # Запуск процесса SCUM
-│   │   ├── UpdateService.cs             # Проверка и установка обновлений
-│   │   ├── LauncherVerificationService.cs# Определение SteamID и верификация
-│   │   ├── DiscordRpcService.cs         # Discord Rich Presence
-│   │   └── ConfigService.cs             # Сохранение настроек пользователя
-│   ├── Resources/              # Иконки и ресурсы приложения
-│   ├── MainWindow.xaml         # Разметка главного окна WPF
-│   └── MainWindow.xaml.cs      # Логика пользовательского интерфейса
+├── Amurka.Shared/              # Общее ядро (IO, Logging, Security, Network, UI)
+├── AmurkaLauncher/             # Клиент лаунчера (C# 12 / .NET 8 WPF)
+├── AmurkaInstaller/            # Брендированный установщик/обновлятор (C# 12 / .NET 8 WPF)
+├── tests/ModSync.Tests/        # Модульные тесты (xUnit + Coverlet)
 ├── assets/                     # Иконки и графические материалы
 ├── dist/                       # Каталог готовых сборок и манифест launcher.json
-├── installer.nsi               # Скрипт сборки инсталлятора NSIS
-├── build.bat                   # Быстрая сборка Release версии
-├── run.bat                     # Запуск лаунчера из командной строки
-└── build-installer.bat         # Полная сборка автономного инсталлятора
+└── build-installer.ps1         # Полная сборка, прогон тестов и упаковка инсталлятора
 ```
 
 ### Сборка через консоль
 ```powershell
-# Сборка проекта в конфигурации Release
-dotnet build AmurkaLauncher.sln -c Release
+# Сборка и запуск тестов
+dotnet test AmurkaLauncher.sln -c Release /p:TreatWarningsAsErrors=true
 
-# Публикация автономной сборки (Self-Contained single-file)
-dotnet publish AmurkaLauncher/AmurkaLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o AmurkaLauncher/publish-standalone
-
-# Сборка инсталлятора через NSIS (или запустите build-installer.bat)
-makensis installer.nsi
+# Полная сборка автономного инсталлятора и dist/launcher.json
+powershell -ExecutionPolicy Bypass -File build-installer.ps1
 ```
 
 ---

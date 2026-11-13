@@ -1,18 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <!-- Simulate the previously installed launcher for the optional release check. -->
-    <Version>2.1.23</Version>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <DebuggerSupport>true</DebuggerSupport>
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="../../AmurkaLauncher/Services/ModManagerService.cs" Link="ModManagerService.cs" />
-    <Compile Include="../../AmurkaLauncher/Models/ModItem.cs" Link="ModItem.cs" />
-    <Compile Include="../../AmurkaLauncher/Models/ModCategory.cs" Link="ModCategory.cs" />
-    <Compile Include="../../AmurkaLauncher/Services/UpdateService.cs" Link="UpdateService.cs" />
-    <Compile Include="../../AmurkaLauncher/Models/UpdateInfo.cs" Link="UpdateInfo.cs" />
-    <Compile Include="../../AmurkaLauncher/Services/ScumDetectionService.cs" Link="ScumDetectionService.cs" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Amurka.Shared\Amurka.Shared.csproj" />
+    <ProjectReference Include="..\..\AmurkaLauncher\AmurkaLauncher.csproj" />
+    <ProjectReference Include="..\..\AmurkaInstaller\AmurkaInstaller.csproj" />
+  </ItemGroup>
+
 </Project>

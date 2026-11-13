@@ -1,10 +1,19 @@
+using System.IO;
+using Amurka.Shared.Core.Constants;
+using Amurka.Shared.Platform;
+using AmurkaLauncher.Infrastructure.Abstractions;
 using DiscordRPC;
+using Microsoft.Extensions.Logging;
 
 namespace AmurkaLauncher.Services;
 
-public sealed class DiscordRpcService : IDisposable
+public sealed class DiscordRpcService(
+    TimeProvider? timeProvider = null,
+    ILogger<DiscordRpcService>? logger = null) : IDiscordRpcService
 {
-    private const string ClientId = "1481533187732668476";
+    private static readonly string[] DiscordProcessNames = ["Discord", "DiscordCanary", "DiscordPTB"];
+
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private DiscordRpcClient? _client;
     private bool _disposed;
 
@@ -12,26 +21,52 @@ public sealed class DiscordRpcService : IDisposable
     {
         if (_disposed) return;
 
+        // Если Discord не запущен в системе, выходим без создания фоновых потоков и аллокаций
+        if (!IsDiscordRunning()) return;
+
         try
         {
-            _client = new DiscordRpcClient(ClientId);
+            _client = new DiscordRpcClient(AppConstants.DiscordClientId);
             _client.Initialize();
             _client.SetPresence(new RichPresence
             {
                 Details = "AMURKA PVE",
-                State = "85.88.179.207:7004",
-                Timestamps = Timestamps.Now,
+                State = AppConstants.ServerAddress,
+                Timestamps = new Timestamps(_timeProvider.GetUtcNow().UtcDateTime),
                 Assets = new Assets
                 {
                     LargeImageKey = "AMURKA",
-                    LargeImageText = "85.88.179.207:7004"
+                    LargeImageText = AppConstants.ServerAddress
                 }
             });
         }
-        catch
+        catch (Exception ex)
         {
-            // Discord may not be running, ignore
+            logger?.LogWarning(ex, "Не удалось инициализировать Discord Rich Presence.");
+            try
+            {
+                _client?.Dispose();
+            }
+            catch (Exception disposeEx)
+            {
+                logger?.LogDebug(disposeEx, "Ошибка освобождения DiscordRpcClient после сбоя.");
+            }
+            _client = null;
         }
+    }
+
+    private static bool IsDiscordRunning()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+
+        // 1. Быстрая проверка наличия активных именованных каналов Discord IPC
+        for (int i = 0; i < 10; i++)
+        {
+            if (File.Exists($@"\\.\pipe\discord-ipc-{i}")) return true;
+        }
+
+        // 2. Fallback: проверка запущенных процессов Discord с гарантированным освобождением дескрипторов
+        return DiscordProcessNames.Any(ProcessManagerHelper.IsAnyProcessRunning);
     }
 
     public void Dispose()
@@ -44,9 +79,9 @@ public sealed class DiscordRpcService : IDisposable
             _client?.Deinitialize();
             _client?.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore
+            logger?.LogDebug(ex, "Ошибка деинициализации Discord Rich Presence.");
         }
         finally
         {

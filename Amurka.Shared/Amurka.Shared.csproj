@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Amurka.Shared</RootNamespace>
+    <AssemblyName>Amurka.Shared</AssemblyName>
+    <Company>AMURKA PVE</Company>
+    <Product>AMURKA PVE Shared Core</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\assets\icon.ico">
+      <Link>Resources\icon.ico</Link>
+    </Resource>
+    <Resource Include="..\assets\icon.png">
+      <Link>Resources\icon.png</Link>
+    </Resource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
+  </ItemGroup>
+
+</Project>

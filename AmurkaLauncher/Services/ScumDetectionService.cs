@@ -1,13 +1,47 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
+using Amurka.Shared.Core.Domain.Results;
+using AmurkaLauncher.Core.Domain.ValueObjects;
+using AmurkaLauncher.Infrastructure.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 
 namespace AmurkaLauncher.Services;
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-public partial class ScumDetectionService
+public sealed partial class ScumDetectionService(ILogger<ScumDetectionService>? logger = null) : IScumDetectionService
 {
+    private readonly ILogger<ScumDetectionService>? _logger = logger;
+    public Task<Result<GamePath>> AutoDetectAsync(CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            string? detected = AutoDetectScum();
+            if (string.IsNullOrWhiteSpace(detected))
+                return Result<GamePath>.Failure("Игра SCUM не найдена автоматически.");
+            return Result<GamePath>.Success(GamePath.From(detected));
+        }, ct);
+    }
+
+    GamePath IScumDetectionService.NormalizeGameRoot(string path) => GamePath.From(NormalizeGameRoot(path));
+
+    ModsPath IScumDetectionService.GetModsPath(GamePath gamePath) => ModsPath.From(GetModsPath(gamePath.Value));
+
+    public bool ResolveAndEnsurePaths(ref GamePath gamePath, ref ModsPath modsPath)
+    {
+        string? gp = gamePath.IsEmpty ? null : gamePath.Value;
+        string? mp = modsPath.IsEmpty ? null : modsPath.Value;
+        bool changed = ResolveAndEnsurePaths(ref gp, ref mp);
+        if (changed)
+        {
+            gamePath = GamePath.From(gp);
+            modsPath = ModsPath.From(mp);
+        }
+        return changed;
+    }
+
+    public string? FindScumExe(GamePath gamePath) => FindScumExe(gamePath.Value);
     [GeneratedRegex(@"""installdir""\s+""([^""]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex InstallDirRegex();
 
@@ -131,7 +165,10 @@ public partial class ScumDetectionService
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "Не удалось просканировать системные диски на наличие Steam.");
+            }
         }
 
         // 6) Считывание libraryfolders.vdf из всех найденных каталогов Steam
@@ -152,7 +189,10 @@ public partial class ScumDetectionService
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Ошибка чтения файла '{VdfPath}'.", vdf);
+                }
             }
 
             if (!candidateLibraries.Contains(steamBase, StringComparer.OrdinalIgnoreCase))
@@ -181,7 +221,10 @@ public partial class ScumDetectionService
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Ошибка чтения манифеста '{ManifestPath}'.", manifest);
+                }
             }
 
             // Прямая проверка common\SCUM в этой библиотеке
@@ -257,7 +300,7 @@ public partial class ScumDetectionService
         return prioritized;
     }
 
-    private static string? DetectFromRunningProcess()
+    private string? DetectFromRunningProcess()
     {
         try
         {
@@ -277,7 +320,10 @@ public partial class ScumDetectionService
                                 return NormalizeGameRoot(Path.GetDirectoryName(exePath) ?? string.Empty);
                             }
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogDebug(ex, "Не удалось получить MainModule для процесса '{ProcessName}'.", name);
+                        }
                     }
                 }
                 finally
@@ -286,7 +332,10 @@ public partial class ScumDetectionService
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Ошибка перечисления процессов SCUM при автопоиске.");
+        }
         return null;
     }
 
@@ -339,7 +388,10 @@ public partial class ScumDetectionService
                     Directory.CreateDirectory(modsPath);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Не удалось создать каталог модов '{ModsPath}'.", modsPath);
+            }
         }
 
         return changed;
@@ -420,6 +472,7 @@ public partial class ScumDetectionService
         return normalized.TrimEnd('\\', '/');
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Preserved as instance API")]
     public string? FindScumExe(string? gamePath)
     {
         if (string.IsNullOrWhiteSpace(gamePath)) return null;
@@ -447,6 +500,7 @@ public partial class ScumDetectionService
     /// Возвращает точный физический путь к папке ~mods для указанного корня игры.
     /// Учитывает Unreal Engine структуру SCUM\Content\Paks\~mods и Content\Paks\~mods.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Preserved as instance API")]
     public string GetModsPath(string gamePath)
     {
         if (string.IsNullOrWhiteSpace(gamePath)) return string.Empty;
@@ -491,7 +545,7 @@ public partial class ScumDetectionService
             var val = subKey?.GetValue(valueName)?.ToString();
             return val?.Replace('/', '\\');
         }
-        catch
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
             return null;
         }

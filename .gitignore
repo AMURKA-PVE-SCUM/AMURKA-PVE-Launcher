@@ -24,6 +24,8 @@ dist/*.yml
 # Logs and temporary files
 *.log
 *.tmp
+TestResults/
+coverage*.xml
 AmurkaInstaller/payload.zip
 .DS_Store
 Thumbs.db

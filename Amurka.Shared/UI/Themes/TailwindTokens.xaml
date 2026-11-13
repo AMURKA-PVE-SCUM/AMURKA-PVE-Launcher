@@ -1,0 +1,108 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options">
+
+    <!-- TAILWIND 4px SPACING SCALE -->
+    <sys:Double x:Key="Space-0">0</sys:Double>
+    <sys:Double x:Key="Space-1">4</sys:Double>
+    <sys:Double x:Key="Space-2">8</sys:Double>
+    <sys:Double x:Key="Space-3">12</sys:Double>
+    <sys:Double x:Key="Space-4">16</sys:Double>
+    <sys:Double x:Key="Space-5">20</sys:Double>
+    <sys:Double x:Key="Space-6">24</sys:Double>
+    <sys:Double x:Key="Space-8">32</sys:Double>
+    <sys:Double x:Key="Space-10">40</sys:Double>
+    <sys:Double x:Key="Space-12">48</sys:Double>
+    <sys:Double x:Key="Space-16">64</sys:Double>
+
+    <!-- TAILWIND BORDER RADIUS SCALE -->
+    <CornerRadius x:Key="Radius-None">0</CornerRadius>
+    <CornerRadius x:Key="Radius-Sm">4</CornerRadius>
+    <CornerRadius x:Key="Radius-Default">6</CornerRadius>
+    <CornerRadius x:Key="Radius-Md">8</CornerRadius>
+    <CornerRadius x:Key="Radius-Lg">12</CornerRadius>
+    <CornerRadius x:Key="Radius-Xl">16</CornerRadius>
+    <CornerRadius x:Key="Radius-2Xl">24</CornerRadius>
+    <CornerRadius x:Key="Radius-Full">9999</CornerRadius>
+
+    <!-- TAILWIND CYBERPUNK COLOR PALETTE -->
+    <Color x:Key="Color-Neutral-950">#0A0A0A</Color>
+    <Color x:Key="Color-Neutral-900">#121214</Color>
+    <Color x:Key="Color-Neutral-800">#1E1E24</Color>
+    <Color x:Key="Color-Neutral-700">#2E2E38</Color>
+    <Color x:Key="Color-Neutral-400">#9CA3AF</Color>
+    <Color x:Key="Color-Neutral-100">#F3F4F6</Color>
+    <Color x:Key="Color-White">#FFFFFF</Color>
+
+    <!-- Neon Emerald Primary (#00FF88) -->
+    <Color x:Key="Color-Emerald-400">#00FF88</Color>
+    <Color x:Key="Color-Emerald-500">#00CC6A</Color>
+    <Color x:Key="Color-Emerald-Glow">#6600FF88</Color>
+    <Color x:Key="Color-Emerald-Dim">#2200FF88</Color>
+
+    <!-- Brand Violet Secondary (#6C5CE7) -->
+    <Color x:Key="Color-Violet-500">#6C5CE7</Color>
+    <Color x:Key="Color-Violet-400">#8B7CF7</Color>
+    <Color x:Key="Color-Violet-Glow">#4D6C5CE7</Color>
+    <Color x:Key="Color-Violet-Dim">#266C5CE7</Color>
+
+    <!-- Rose Danger (#FF4757) -->
+    <Color x:Key="Color-Rose-500">#FF4757</Color>
+    <Color x:Key="Color-Rose-Dim">#26FF4757</Color>
+
+    <!-- Amber Warning (#FDCB6E) -->
+    <Color x:Key="Color-Amber-400">#FDCB6E</Color>
+
+    <!-- Discord Brand (#5865F2) -->
+    <Color x:Key="Color-Discord-500">#5865F2</Color>
+
+    <!-- Glass Surfaces and Borders -->
+    <Color x:Key="Color-Glass-Surface">#D0121214</Color>
+    <Color x:Key="Color-Glass-Border">#26FFFFFF</Color>
+    <Color x:Key="Color-Glass-Border-Focus">#6600FF88</Color>
+
+    <!-- Solid Color Brushes (Frozen for zero memory allocation & high GPU throughput) -->
+    <SolidColorBrush x:Key="Brush-Canvas" Color="{StaticResource Color-Neutral-950}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Surface" Color="{StaticResource Color-Neutral-900}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Surface-Elevated" Color="{StaticResource Color-Neutral-800}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Text-Primary" Color="{StaticResource Color-White}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Text-Muted" Color="{StaticResource Color-Neutral-400}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Emerald-Neon" Color="{StaticResource Color-Emerald-400}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Emerald-Dim" Color="{StaticResource Color-Emerald-Dim}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Violet-Brand" Color="{StaticResource Color-Violet-500}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Violet-Dim" Color="{StaticResource Color-Violet-Dim}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Rose-Error" Color="{StaticResource Color-Rose-500}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Rose-Dim" Color="{StaticResource Color-Rose-Dim}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Amber-Warning" Color="{StaticResource Color-Amber-400}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Discord-Brand" Color="{StaticResource Color-Discord-500}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Glass-Surface" Color="{StaticResource Color-Glass-Surface}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Glass-Border" Color="{StaticResource Color-Glass-Border}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Brush-Glass-Border-Focus" Color="{StaticResource Color-Glass-Border-Focus}" po:Freeze="True"/>
+
+    <!-- Gradients (Frozen) -->
+    <LinearGradientBrush x:Key="Brush-Gradient-Emerald" StartPoint="0,0" EndPoint="1,1" po:Freeze="True">
+        <GradientStop Color="{StaticResource Color-Emerald-400}" Offset="0"/>
+        <GradientStop Color="{StaticResource Color-Emerald-500}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brush-Gradient-Violet" StartPoint="0,0" EndPoint="1,1" po:Freeze="True">
+        <GradientStop Color="{StaticResource Color-Violet-500}" Offset="0"/>
+        <GradientStop Color="{StaticResource Color-Violet-400}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- Neon Glow Effects (Frozen) -->
+    <DropShadowEffect x:Key="Effect-Neon-Glow"
+                      Color="{StaticResource Color-Emerald-400}"
+                      BlurRadius="16"
+                      ShadowDepth="0"
+                      Opacity="0.6"
+                      po:Freeze="True"/>
+
+    <DropShadowEffect x:Key="Effect-Violet-Glow"
+                      Color="{StaticResource Color-Violet-500}"
+                      BlurRadius="16"
+                      ShadowDepth="0"
+                      Opacity="0.4"
+                      po:Freeze="True"/>
+</ResourceDictionary>

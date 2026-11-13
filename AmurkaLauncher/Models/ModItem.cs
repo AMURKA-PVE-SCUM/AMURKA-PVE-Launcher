@@ -1,6 +1,6 @@
 namespace AmurkaLauncher.Models;
 
-public class ModItem
+public sealed class ModItem
 {
     public string Name { get; set; } = string.Empty;
     public string DownloadUrl { get; set; } = string.Empty;

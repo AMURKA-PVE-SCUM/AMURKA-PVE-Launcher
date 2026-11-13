@@ -4,30 +4,33 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Amurka.Shared.Core.Constants;
+using Amurka.Shared.Network;
+using AmurkaLauncher.Core.Domain.ValueObjects;
+using AmurkaLauncher.Infrastructure.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 
 namespace AmurkaLauncher.Services;
 
-public partial class LauncherVerificationService
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed partial class LauncherVerificationService(
+    HttpClient? httpClient = null,
+    ILogger<LauncherVerificationService>? logger = null) : IVerificationService
 {
     private static readonly string[] DefaultEndpoints =
     [
-        "http://127.0.0.1:8080/api/launcher/verify",
-        "http://localhost:8080/api/launcher/verify",
-        "http://85.88.179.207:8080/api/launcher/verify"
+        $"http://127.0.0.1:{AppConstants.ServerVerifyPort}/api/launcher/verify",
+        $"http://localhost:{AppConstants.ServerVerifyPort}/api/launcher/verify",
+        $"http://{AppConstants.ServerHost}:{AppConstants.ServerVerifyPort}/api/launcher/verify"
     ];
 
     private const ulong Steam64Base = 76561197960265728UL;
     private const long MaxLogFileSizeBytes = 1024 * 1024; // 1 MB limit to prevent disk leak
 
-    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-    })
-    {
-        Timeout = TimeSpan.FromSeconds(5)
-    };
+    private static readonly HttpClient SharedHttpClient = HttpClientDefaults.CreateClient(TimeSpan.FromSeconds(5));
+    private readonly HttpClient HttpClient = httpClient ?? SharedHttpClient;
+    private readonly ILogger<LauncherVerificationService>? _logger = logger;
 
     private static readonly string LogFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -73,7 +76,17 @@ public partial class LauncherVerificationService
             File.AppendAllText(LogFilePath, entry);
             Debug.WriteLine($"[LauncherVerify] {message}");
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger?.LogDebug(ex, "Не удалось записать журнал верификации '{LogPath}'.", LogFilePath);
+        }
+    }
+
+    public string? GetActiveSteamId64(GamePath gamePath) => GetActiveSteamId64(gamePath.Value);
+
+    Task IVerificationService.SendVerificationToAllAsync(string steamId64, string launcherVersion, int installedModsCount, string serverIp, CancellationToken ct)
+    {
+        return SendVerificationToAllAsync(steamId64, launcherVersion, installedModsCount, serverIp);
     }
 
     /// <summary>
@@ -93,7 +106,7 @@ public partial class LauncherVerificationService
                 if (activeUserObj != null && long.TryParse(activeUserObj.ToString(), out long activeUserId) && activeUserId > 0)
                 {
                     ulong steamId64 = Steam64Base + (ulong)activeUserId;
-                    string res = steamId64.ToString();
+                    string res = steamId64.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     Log($"SteamID detected from Registry ActiveProcess: {res}");
                     return res;
                 }
@@ -203,7 +216,7 @@ public partial class LauncherVerificationService
         var payload = new
         {
             steamId = steamId.Trim(),
-            version = string.IsNullOrWhiteSpace(version) ? "2.1.22" : version.Trim(),
+            version = string.IsNullOrWhiteSpace(version) ? AppConstants.Version : version.Trim(),
             installedCount = installedModsCount,
             timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
@@ -211,7 +224,6 @@ public partial class LauncherVerificationService
         byte[] jsonUtf8Bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
         Log($"Sending verification for SteamID {steamId} (v{payload.version}, {installedModsCount} mods) to {targets.Count} endpoints...");
 
-        bool anySuccess = false;
         var tasks = targets.Select(async url =>
         {
             try
@@ -224,25 +236,28 @@ public partial class LauncherVerificationService
                 if (response.IsSuccessStatusCode)
                 {
                     Log($"Success from {url} (HTTP {(int)response.StatusCode}): {respBody}");
-                    anySuccess = true;
+                    return true;
                 }
                 else
                 {
                     Log($"Non-success from {url} (HTTP {(int)response.StatusCode}): {respBody}");
+                    return false;
                 }
             }
             catch (Exception ex)
             {
                 Log($"Endpoint {url} error: {ex.Message}");
+                return false;
             }
         });
 
-        await Task.WhenAll(tasks);
+        var results = await Task.WhenAll(tasks);
+        bool anySuccess = results.Any(r => r);
         Log($"Verification finished. Success: {anySuccess}");
         return anySuccess;
     }
 
-    private static string? FindSteamPath(string? hintPath)
+    private string? FindSteamPath(string? hintPath)
     {
         // 1. Попытка извлечь путь к Steam из пути к SCUM (например D:\SteamLibrary\steamapps\common\SCUM)
         try
@@ -259,7 +274,10 @@ public partial class LauncherVerificationService
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Не удалось извлечь путь к Steam из hint '{HintPath}'.", hintPath);
+        }
 
         // 2. Реестр
         try
@@ -277,7 +295,10 @@ public partial class LauncherVerificationService
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Не удалось прочитать путь к Steam из реестра Windows.");
+        }
 
         // 3. Стандартные папки
         string[] standard =

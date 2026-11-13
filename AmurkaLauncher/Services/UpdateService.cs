@@ -8,11 +8,20 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Amurka.Shared.Core.Constants;
+using Amurka.Shared.Network;
+using AmurkaLauncher.Core.Serialization;
+using AmurkaLauncher.Infrastructure.Abstractions;
 using AmurkaLauncher.Models;
+using Microsoft.Extensions.Logging;
 
 namespace AmurkaLauncher.Services;
 
-public partial class UpdateService
+public sealed partial class UpdateService(
+    HttpClient? client = null,
+    HttpClient? redirectClient = null,
+    TimeProvider? timeProvider = null,
+    ILogger<UpdateService>? logger = null) : IUpdateService
 {
     private const string GitHubApiLatestReleaseUrl = "https://api.github.com/repos/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest";
     private const string GitHubLatestRedirectUrl = "https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/latest";
@@ -20,54 +29,20 @@ public partial class UpdateService
     private const string GitHubReleasesDownloadBase = "https://github.com/AMURKA-PVE-SCUM/AMURKA-PVE-Launcher/releases/download";
 
     // Единственный экземпляр HttpClient во избежание утечки сокетов (Socket Exhaustion)
-    private static readonly HttpClient SharedHttpClient = CreateHttpClient(allowAutoRedirect: true, timeoutMinutes: 10);
-    private static readonly HttpClient SharedRedirectClient = CreateHttpClient(allowAutoRedirect: false, timeoutSeconds: 10);
-    private readonly HttpClient HttpClient;
-    private readonly HttpClient RedirectClient;
+    private static readonly HttpClient SharedHttpClient = HttpClientDefaults.CreateClient(TimeSpan.FromMinutes(10), allowAutoRedirect: true);
+    private static readonly HttpClient SharedRedirectClient = HttpClientDefaults.CreateClient(TimeSpan.FromSeconds(10), allowAutoRedirect: false);
+    private readonly HttpClient HttpClient = client ?? SharedHttpClient;
+    private readonly HttpClient RedirectClient = redirectClient ?? SharedRedirectClient;
+    private readonly TimeProvider TimeProvider = timeProvider ?? TimeProvider.System;
+    private readonly ILogger<UpdateService>? _logger = logger;
 
     public string? UpdatesDirectory { get; set; }
     public string? VersionOverride { get; set; }
 
-    public UpdateService(HttpClient? client = null, HttpClient? redirectClient = null)
-    {
-        HttpClient = client ?? SharedHttpClient;
-        RedirectClient = redirectClient ?? SharedRedirectClient;
-    }
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     [GeneratedRegex(@"/tag/(?:v|V)?([0-9.]+)", RegexOptions.CultureInvariant)]
     private static partial Regex TagVersionRegex();
 
-    private static HttpClient CreateHttpClient(bool allowAutoRedirect, int timeoutMinutes = 0, int timeoutSeconds = 0)
-    {
-        var handler = new SocketsHttpHandler
-        {
-            AllowAutoRedirect = allowAutoRedirect,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-        };
-
-        var client = new HttpClient(handler)
-        {
-            Timeout = timeoutMinutes > 0 ? TimeSpan.FromMinutes(timeoutMinutes) : TimeSpan.FromSeconds(timeoutSeconds)
-        };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("AMURKA-Launcher/2.0");
-        return client;
-    }
-
-    public string CurrentVersion
-    {
-        get
-        {
-            if (!string.IsNullOrEmpty(VersionOverride)) return VersionOverride;
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.28";
-        }
-    }
+    public string CurrentVersion => !string.IsNullOrEmpty(VersionOverride) ? VersionOverride : AppConstants.Version;
 
     public string GetUpdatesFolder()
     {
@@ -78,16 +53,16 @@ public partial class UpdateService
         );
     }
 
-    public async Task<UpdateInfo?> CheckForUpdateAsync()
+    public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default)
     {
         // 1) Static launcher.json: no unauthenticated GitHub API quota.
         try
         {
-            using var response = await HttpClient.GetAsync(GitHubRawLauncherJsonUrl, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await HttpClient.GetAsync(GitHubRawLauncherJsonUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             if (response.IsSuccessStatusCode)
             {
-                await using var stream = await response.Content.ReadAsStreamAsync();
-                var info = await JsonSerializer.DeserializeAsync<UpdateInfo>(stream, JsonOptions);
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                var info = await JsonSerializer.DeserializeAsync(stream, LauncherJsonContext.Default.UpdateInfo, ct);
 
                 if (info != null && !string.IsNullOrEmpty(info.Version))
                 {
@@ -106,13 +81,13 @@ public partial class UpdateService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[UpdateService] GitHub raw json check failed: {ex.Message}");
+            _logger?.LogDebug(ex, "Проверка raw launcher.json не удалась.");
         }
 
         // 2) Fallback: редирект GitHub Releases (без API rate-limit и без утечки сокетов)
         try
         {
-            using var resp = await RedirectClient.GetAsync(GitHubLatestRedirectUrl, HttpCompletionOption.ResponseHeadersRead);
+            using var resp = await RedirectClient.GetAsync(GitHubLatestRedirectUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             if (resp.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.MovedPermanently)
             {
                 var location = resp.Headers.Location;
@@ -140,18 +115,18 @@ public partial class UpdateService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[UpdateService] GitHub redirect check failed: {ex.Message}");
+            _logger?.LogDebug(ex, "Проверка редиректа GitHub Releases не удалась.");
         }
 
         // 3) Last resort: GitHub Releases API.
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiLatestReleaseUrl);
-            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             if (response.IsSuccessStatusCode)
             {
-                await using var stream = await response.Content.ReadAsStreamAsync();
-                using var doc = await JsonDocument.ParseAsync(stream);
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
                 var root = doc.RootElement;
                 if (root.TryGetProperty("tag_name", out var tagElem))
                 {
@@ -198,38 +173,39 @@ public partial class UpdateService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[UpdateService] GitHub API check failed: {ex.Message}");
+            _logger?.LogDebug(ex, "Проверка GitHub Releases API не удалась.");
         }
 
         return null;
     }
 
-    public Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int> onProgress, CancellationToken ct = default)
+    public Task<string> DownloadUpdateAsync(UpdateInfo update, Action<int> onProgress, CancellationToken ct = default)
     {
-        return DownloadUpdateAsync(updateInfo, (pct, _, _) => onProgress(pct), ct);
+        return DownloadUpdateAsync(update, (pct, _, _) => onProgress(pct), ct);
     }
 
-    public async Task<string> DownloadUpdateAsync(UpdateInfo updateInfo, Action<int, long, long> onProgress, CancellationToken ct = default)
+    public async Task<string> DownloadUpdateAsync(UpdateInfo update, Action<int, long, long> onProgress, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(update);
         string updatesFolder = GetUpdatesFolder();
         Directory.CreateDirectory(updatesFolder);
-        string destPath = Path.Combine(updatesFolder, updateInfo.File);
+        string destPath = Path.Combine(updatesFolder, update.File);
         string tempPath = destPath + ".tmp";
 
         // Fast path: если файл уже скачан целиком, проверен по размеру и хэшу — возвращаем сразу
         if (File.Exists(destPath))
         {
             var existingFi = new FileInfo(destPath);
-            if (updateInfo.Size <= 0 || existingFi.Length == updateInfo.Size)
+            if (update.Size <= 0 || existingFi.Length == update.Size)
             {
-                if (string.IsNullOrWhiteSpace(updateInfo.Sha512) || VerifySha512(destPath, updateInfo.Sha512))
+                if (string.IsNullOrWhiteSpace(update.Sha512) || VerifySha512(destPath, update.Sha512, update.Size))
                 {
                     long total = existingFi.Length;
                     onProgress(100, total, total);
                     return destPath;
                 }
             }
-            try { File.Delete(destPath); } catch { }
+            TryDeleteFile(destPath);
         }
 
         const int maxRetries = 4;
@@ -243,26 +219,26 @@ public partial class UpdateService
                 ct.ThrowIfCancellationRequested();
 
                 long existingLength = File.Exists(tempPath) ? new FileInfo(tempPath).Length : 0;
-                if (updateInfo.Size > 0 && existingLength > updateInfo.Size)
+                if (update.Size > 0 && existingLength > update.Size)
                 {
-                    try { File.Delete(tempPath); } catch { }
+                    TryDeleteFile(tempPath);
                     existingLength = 0;
                 }
-                else if (updateInfo.Size > 0 && existingLength == updateInfo.Size)
+                else if (update.Size > 0 && existingLength == update.Size)
                 {
-                    if (string.IsNullOrWhiteSpace(updateInfo.Sha512) || VerifySha512(tempPath, updateInfo.Sha512))
+                    if (string.IsNullOrWhiteSpace(update.Sha512) || VerifySha512(tempPath, update.Sha512, update.Size))
                     {
                         File.Move(tempPath, destPath, overwrite: true);
-                        onProgress(100, updateInfo.Size, updateInfo.Size);
+                        onProgress(100, update.Size, update.Size);
                         return destPath;
                     }
-                    try { File.Delete(tempPath); } catch { }
+                    TryDeleteFile(tempPath);
                     existingLength = 0;
                 }
 
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Get, updateInfo.DownloadUrl);
+                    using var request = new HttpRequestMessage(HttpMethod.Get, update.DownloadUrl);
                     if (existingLength > 0)
                     {
                         request.Headers.Range = new RangeHeaderValue(existingLength, null);
@@ -272,7 +248,7 @@ public partial class UpdateService
 
                     if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
                     {
-                        try { File.Delete(tempPath); } catch { }
+                        TryDeleteFile(tempPath);
                         existingLength = 0;
                         continue;
                     }
@@ -283,11 +259,11 @@ public partial class UpdateService
                     long totalBytes;
                     if (isPartial)
                     {
-                        totalBytes = response.Content.Headers.ContentRange?.Length ?? updateInfo.Size;
+                        totalBytes = response.Content.Headers.ContentRange?.Length ?? update.Size;
                     }
                     else
                     {
-                        totalBytes = response.Content.Headers.ContentLength ?? updateInfo.Size;
+                        totalBytes = response.Content.Headers.ContentLength ?? update.Size;
                         existingLength = 0; // Начинаем заново, если сервер вернул 200 OK
                     }
 
@@ -336,9 +312,9 @@ public partial class UpdateService
                         throw new IOException($"Размер скачанного файла ({fi.Length}) не совпадает с ожидаемым ({totalBytes}).");
                     }
 
-                    if (!string.IsNullOrWhiteSpace(updateInfo.Sha512) && !VerifySha512(tempPath, updateInfo.Sha512))
+                    if (!string.IsNullOrWhiteSpace(update.Sha512) && !VerifySha512(tempPath, update.Sha512, update.Size > 0 ? update.Size : null))
                     {
-                        try { File.Delete(tempPath); } catch { }
+                        TryDeleteFile(tempPath);
                         throw new IOException("Контрольная сумма SHA-512 скачанного обновления не совпадает.");
                     }
 
@@ -352,7 +328,7 @@ public partial class UpdateService
                 }
                 catch (Exception ex) when (attempt < maxRetries)
                 {
-                    Debug.WriteLine($"[UpdateService] Попытка {attempt} завершилась ошибкой: {ex.Message}. Ожидание перед повтором...");
+                    _logger?.LogWarning(ex, "Попытка загрузки обновления #{Attempt} завершилась ошибкой. Повтор...", attempt);
                     await Task.Delay(TimeSpan.FromSeconds(Math.Min(6, attempt * 2)), ct);
                 }
             }
@@ -365,17 +341,34 @@ public partial class UpdateService
         }
     }
 
-    private static bool VerifySha512(string filePath, string expectedHex)
+    private void TryDeleteFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(expectedHex) || !File.Exists(filePath)) return true;
         try
         {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger?.LogDebug(ex, "Не удалось удалить временный файл обновления '{Path}'.", path);
+        }
+    }
+
+    public static bool VerifySha512(string filePath, string? expectedHex, long? expectedSize = null)
+    {
+        if (string.IsNullOrWhiteSpace(expectedHex) || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return false;
+
+        try
+        {
+            if (expectedSize is > 0 && new FileInfo(filePath).Length != expectedSize.Value)
+                return false;
+
             using var sha = SHA512.Create();
-            using var fs = File.OpenRead(filePath);
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
             byte[] hash = sha.ComputeHash(fs);
             return string.Equals(Convert.ToHexString(hash), expectedHex.Trim(), StringComparison.OrdinalIgnoreCase);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
             return false;
         }
@@ -385,7 +378,7 @@ public partial class UpdateService
     {
         if (File.Exists(installerPath))
         {
-            Process.Start(new ProcessStartInfo
+            using var proc = Process.Start(new ProcessStartInfo
             {
                 FileName = installerPath,
                 Arguments = "/UPDATE",

@@ -3,7 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:controls="clr-namespace:AmurkaLauncher.Controls"
+        xmlns:controls="clr-namespace:Amurka.Shared.UI.Controls;assembly=Amurka.Shared"
+        xmlns:vm="clr-namespace:AmurkaLauncher.Presentation.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         mc:Ignorable="d"
         Title="AMURKA PVE Launcher"
         Height="560" Width="960"
@@ -15,9 +17,35 @@
         Icon="Resources/icon.ico"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
-        RenderOptions.BitmapScalingMode="HighQuality"
         RenderOptions.ClearTypeHint="Enabled"
         StateChanged="Window_StateChanged">
+
+    <Window.Resources>
+        <!-- Reusable Cyberpunk Mode Button Style -->
+        <Style x:Key="ModeToggleBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
     <Border BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="12">
         <Grid ClipToBounds="True">
@@ -29,7 +57,7 @@
                 </RadialGradientBrush>
             </Grid.Background>
 
-            <!-- Animated Particles -->
+            <!-- Animated Particles (Retained DrawingVisual - Zero Layout Invalidation) -->
             <controls:ParticleCanvas IsHitTestVisible="False"/>
 
             <Grid>
@@ -39,7 +67,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Custom Title Bar (Tailwind Dark Cyberpunk) -->
+                <!-- Custom Title Bar (Dark Cyberpunk) -->
                 <Border Grid.Row="0" Background="#90090D14" BorderBrush="#18FFFFFF" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseDown">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -59,18 +87,21 @@
 
                             <!-- Sleek Branded Top Version Badge -->
                             <Border Background="#1A0D1117" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                    Cursor="Hand" MouseLeftButtonDown="UpdateStatusDot_MouseLeftButtonDown" ToolTip="Статус клиента. Нажмите для проверки обновлений.">
+                                    Cursor="Hand" ToolTip="Статус клиента. Нажмите для проверки обновлений.">
+                                <Border.InputBindings>
+                                    <MouseBinding Gesture="LeftClick" Command="{Binding CheckForUpdatesCommand}"/>
+                                </Border.InputBindings>
                                 <Border.Effect>
                                     <DropShadowEffect Color="#00FF88" BlurRadius="8" Opacity="0.25" ShadowDepth="0"/>
                                 </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse x:Name="UpdateStatusDot" Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,5,0">
+                                    <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,5,0">
                                         <Ellipse.Effect>
                                             <DropShadowEffect Color="#00FF88" BlurRadius="6" ShadowDepth="0"/>
                                         </Ellipse.Effect>
                                     </Ellipse>
                                     <TextBlock Text="v" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock x:Name="AppVersionText" Text="2.1.29" FontSize="9.5" FontWeight="Black" Foreground="{StaticResource AccentBrush}"/>
+                                    <TextBlock Text="{Binding AppVersionText}" FontSize="9.5" FontWeight="Black" Foreground="{StaticResource AccentBrush}"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -107,10 +138,10 @@
                     </Grid>
                 </Border>
 
-                <!-- Dedicated Notification Banner (Row 1 - Never overlaps inputs!) -->
-                <Border x:Name="ModsNotifyBanner" Grid.Row="1" Margin="14,10,14,0"
+                <!-- Dedicated Notification Banner (Row 1 - Never overlaps inputs) -->
+                <Border Grid.Row="1" Margin="14,10,14,0"
                         Background="#F0091C14" BorderBrush="#6000FF88" BorderThickness="1" CornerRadius="10" Padding="14,8"
-                        Visibility="Collapsed">
+                        Visibility="{Binding ModSync.IsSyncBannerVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Border.Effect>
                         <DropShadowEffect Color="#00FF88" BlurRadius="20" Opacity="0.25" ShadowDepth="2"/>
                     </Border.Effect>
@@ -124,12 +155,12 @@
                         <Path Grid.Column="0" Data="{StaticResource IconSparklesGeometry}" Fill="{StaticResource AccentBrush}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                            <TextBlock x:Name="ModsNotifyTitle" Text="Требуется синхронизация" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
-                            <TextBlock x:Name="ModsNotifyDesc" Text="" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding ModSync.SyncBannerTitle}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text="{Binding ModSync.SyncBannerDescription}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="ModsNotifyDownloadBtn" Margin="0,0,8,0" Padding="14,6" Cursor="Hand" Click="ModsNotifyDownloadBtn_Click">
+                            <Button Margin="0,0,8,0" Padding="14,6" Cursor="Hand" Command="{Binding ModSync.SynchronizeModsCommand}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="6" Padding="{TemplateBinding Padding}">
@@ -147,7 +178,7 @@
                                 </Button.Template>
                             </Button>
 
-                            <Button Padding="10,6" Cursor="Hand" Click="ModsNotifyLaterBtn_Click">
+                            <Button Padding="10,6" Cursor="Hand" Command="{Binding ModSync.DismissBannerCommand}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
@@ -184,16 +215,14 @@
 
                             <!-- Logo Section -->
                             <Grid Grid.Row="0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
                                 <StackPanel>
                                     <TextBlock Text="AMURKA" FontSize="28" FontWeight="Black" Foreground="#FFFFFF"/>
                                     <TextBlock Text="PVE MOD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,2,0,6"/>
                                     <Border Background="#14FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="14"
-                                            Padding="10,4" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonUp="ServerInfo_Click">
+                                            Padding="10,4" HorizontalAlignment="Left" Cursor="Hand">
+                                        <Border.InputBindings>
+                                            <MouseBinding Gesture="LeftClick" Command="{Binding CopyServerInfoCommand}"/>
+                                        </Border.InputBindings>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock Text="SCUM Server | 85.88.179.207:7004" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                                             <Path Data="{StaticResource IconCopyGeometry}" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="11" Height="11" Stretch="Uniform" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -203,21 +232,61 @@
                             </Grid>
 
                             <!-- Progress Section -->
-                            <StackPanel x:Name="ProgressSection" Grid.Row="1" Margin="0,10,0,0" Visibility="Collapsed">
-                                <ProgressBar x:Name="DownloadProgressBar" Style="{StaticResource CustomProgressBarStyle}" Value="0"/>
-                                <TextBlock x:Name="ProgressLabel" Text="Подготовка к скачиванию..." FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,0"/>
+                            <StackPanel Grid.Row="1" Margin="0,10,0,0" Visibility="{Binding ModSync.IsDownloading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ProgressBar Style="{StaticResource CustomProgressBarStyle}" Value="{Binding ModSync.DownloadProgressPercent}"/>
+                                <TextBlock Text="{Binding ModSync.DownloadProgressLabel}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
 
                             <!-- Status Badge -->
-                            <Border x:Name="StatusBadge" Grid.Row="2" Background="{StaticResource AccentDimBrush}"
-                                    BorderBrush="#2500FF88" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,10,0,0">
+                            <Border Grid.Row="2" CornerRadius="8" Padding="12,8" Margin="0,10,0,0">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{StaticResource AccentDimBrush}"/>
+                                        <Setter Property="BorderBrush" Value="#2500FF88"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsStatusOk}" Value="False">
+                                                <Setter Property="Background" Value="{StaticResource DangerDimBrush}"/>
+                                                <Setter Property="BorderBrush" Value="#25FF4757"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0">
-                                        <Ellipse.Effect>
-                                            <DropShadowEffect Color="#00FF88" BlurRadius="8" ShadowDepth="0"/>
-                                        </Ellipse.Effect>
+                                    <Ellipse Width="7" Height="7" Margin="0,0,8,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="#00FF88" BlurRadius="8" ShadowDepth="0"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsStatusOk}" Value="False">
+                                                        <Setter Property="Fill" Value="{StaticResource DangerBrush}"/>
+                                                        <Setter Property="Effect">
+                                                            <Setter.Value>
+                                                                <DropShadowEffect Color="#FF4757" BlurRadius="8" ShadowDepth="0"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
                                     </Ellipse>
-                                    <TextBlock x:Name="StatusText" Text="Загрузка..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                    <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsStatusOk}" Value="False">
+                                                        <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </Border>
 
@@ -230,14 +299,14 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                    <TextBlock x:Name="AvailableCountText" Text="0" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ModSync.AvailableCount}" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
                                     <TextBlock Text="ДОСТУПНО" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center"/>
                                 </StackPanel>
 
                                 <Rectangle Grid.Column="1" Fill="#20FFFFFF" Height="26"/>
 
                                 <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                    <TextBlock x:Name="InstalledCountText" Text="0" FontSize="22" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ModSync.InstalledCount}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
                                     <TextBlock Text="УСТАНОВЛЕНО" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
@@ -245,7 +314,7 @@
                             <!-- Action Buttons -->
                             <StackPanel Grid.Row="4" Margin="0,0,0,10">
                                 <!-- Launch Button -->
-                                <Button x:Name="LaunchBtn" Margin="0,0,0,6" Height="42" Cursor="Hand" Click="LaunchBtn_Click">
+                                <Button Margin="0,0,0,6" Height="42" Cursor="Hand" Command="{Binding LaunchGameCommand}">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="b" Background="{StaticResource AccentGradientBrush}" CornerRadius="8">
@@ -270,7 +339,7 @@
                                 </Button>
 
                                 <!-- Download Selected -->
-                                <Button x:Name="DownloadBtn" Margin="0,0,0,6" Height="38" Cursor="Hand" Click="DownloadBtn_Click">
+                                <Button Margin="0,0,0,6" Height="38" Cursor="Hand" Command="{Binding SynchronizeModsCommand}">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="b" Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" BorderThickness="1" CornerRadius="8">
@@ -292,7 +361,7 @@
                                 </Button>
 
                                 <!-- Delete All Mods -->
-                                <Button x:Name="DeleteBtn" Height="36" Cursor="Hand" Click="DeleteBtn_Click">
+                                <Button Height="36" Cursor="Hand" Command="{Binding DeleteModsCommand}">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="b" Background="Transparent" BorderBrush="#35FF4757" BorderThickness="1" CornerRadius="8">
@@ -324,9 +393,48 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Button x:Name="ModeDx11Btn" Grid.Column="0" Content="DX11" Click="ModeBtn_Click" Tag="dx11"/>
-                                        <Button x:Name="ModeDx12Btn" Grid.Column="1" Content="DX12" Click="ModeBtn_Click" Tag="dx12"/>
-                                        <Button x:Name="ModeVulkanBtn" Grid.Column="2" Content="Vulkan" Click="ModeBtn_Click" Tag="vulkan"/>
+
+                                        <!-- DX11 -->
+                                        <Button Grid.Column="0" Content="DX11" Command="{Binding SetLaunchModeCommand}" CommandParameter="dx11">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource ModeToggleBtnStyle}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDx11}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                                            <Setter Property="Foreground" Value="#0A0A0A"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+
+                                        <!-- DX12 -->
+                                        <Button Grid.Column="1" Content="DX12" Command="{Binding SetLaunchModeCommand}" CommandParameter="dx12">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource ModeToggleBtnStyle}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDx12}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                                            <Setter Property="Foreground" Value="#0A0A0A"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+
+                                        <!-- Vulkan -->
+                                        <Button Grid.Column="2" Content="Vulkan" Command="{Binding SetLaunchModeCommand}" CommandParameter="vulkan">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource ModeToggleBtnStyle}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsVulkan}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                                            <Setter Property="Foreground" Value="#0A0A0A"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
                                     </Grid>
                                 </Border>
                             </StackPanel>
@@ -368,9 +476,11 @@
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="GamePathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
-                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="GamePathInput_TextChanged" LostFocus="GamePathInput_LostFocus"/>
-                                    <Button x:Name="BrowseGameBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseGameBtn_Click" ToolTip="Выбрать папку с игрой"
+                                    <TextBox Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
+                                             Text="{Binding Settings.GamePathText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="{Binding Settings.GamePathText}"
+                                             LostFocus="GamePathInput_LostFocus"/>
+                                    <Button Grid.Column="2" Width="38" Height="36" Cursor="Hand" Command="{Binding Settings.BrowseGameFolderCommand}" ToolTip="Выбрать папку с игрой"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
@@ -382,8 +492,19 @@
                                     </Button>
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                    <Ellipse x:Name="GameStatusDot" Width="6" Height="6" Fill="{StaticResource DangerBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="GameStatusText" Text="SCUM не найден" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    <Ellipse Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource DangerBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.IsGameFound}" Value="True">
+                                                        <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding Settings.GameStatusDescription}" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}"/>
                                 </StackPanel>
                             </StackPanel>
 
@@ -396,9 +517,11 @@
                                         <ColumnDefinition Width="6"/>
                                         <ColumnDefinition Width="38"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="ModsPathInput" Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
-                                             ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="ModsPathInput_TextChanged" LostFocus="ModsPathInput_LostFocus"/>
-                                    <Button x:Name="BrowseModsBtn" Grid.Column="2" Width="38" Height="36" Cursor="Hand" Click="BrowseModsBtn_Click" ToolTip="Выбрать папку модов"
+                                    <TextBox Grid.Column="0" Style="{StaticResource CustomTextBoxStyle}"
+                                             Text="{Binding Settings.ModsPathText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="{Binding Settings.ModsPathText}"
+                                             LostFocus="ModsPathInput_LostFocus"/>
+                                    <Button Grid.Column="2" Width="38" Height="36" Cursor="Hand" Command="{Binding Settings.BrowseModsFolderCommand}" ToolTip="Выбрать папку модов"
                                             Background="{StaticResource PurpleDimBrush}" BorderBrush="#306C5CE7" BorderThickness="1">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
@@ -429,7 +552,7 @@
                                 <!-- Vote -->
                                 <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
                                         Background="{StaticResource PurpleDimBrush}" BorderBrush="#356C5CE7" Foreground="{StaticResource PurpleBrush}"
-                                        Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/votes">
+                                        Command="{Binding OpenUrlCommand}" CommandParameter="https://wargm.ru/server/77385/votes">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Path Data="{StaticResource IconFlameGeometry}" Fill="{StaticResource PurpleBrush}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Голосование" VerticalAlignment="Center"/>
@@ -439,7 +562,7 @@
                                 <!-- Shop -->
                                 <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
                                         Background="#20FDCB6E" BorderBrush="#35FDCB6E" Foreground="{StaticResource YellowBrush}"
-                                        Click="OpenLink_Click" Tag="https://wargm.ru/server/77385/shop">
+                                        Command="{Binding OpenUrlCommand}" CommandParameter="https://wargm.ru/server/77385/shop">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Path Data="{StaticResource IconShoppingBagGeometry}" Stroke="{StaticResource YellowBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Магазин" VerticalAlignment="Center"/>
@@ -449,7 +572,7 @@
                                 <!-- Website -->
                                 <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource LinkBtnStyle}"
                                         Background="{StaticResource AccentDimBrush}" BorderBrush="#3500FF88" Foreground="{StaticResource AccentBrush}"
-                                        Click="OpenLink_Click" Tag="https://amurka-pve-scum.github.io/">
+                                        Command="{Binding OpenUrlCommand}" CommandParameter="https://amurka-pve-scum.github.io/">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Path Data="{StaticResource IconGlobeGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Сайт сервера" VerticalAlignment="Center"/>
@@ -459,7 +582,7 @@
                                 <!-- Lolka -->
                                 <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource LinkBtnStyle}"
                                         Background="#205865F2" BorderBrush="#355865F2" Foreground="{StaticResource DiscordBrush}"
-                                        Click="OpenLink_Click" Tag="https://lolka.gg/nmgHA2I">
+                                        Command="{Binding OpenUrlCommand}" CommandParameter="https://lolka.gg/nmgHA2I">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Path Data="{StaticResource IconMessagesGeometry}" Stroke="{StaticResource DiscordBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Discord Lolka" VerticalAlignment="Center"/>
@@ -482,7 +605,7 @@
                                         <TextBlock Text="Закрывает SCUM и удаляет кэш %LOCALAPPDATA%\SCUM при сбоях" FontSize="9.5" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                                     </StackPanel>
 
-                                    <Button x:Name="WipeClientBtn" Grid.Column="1" Height="34" Padding="14,0" Cursor="Hand" Click="WipeClientBtn_Click"
+                                    <Button Grid.Column="1" Height="34" Padding="14,0" Cursor="Hand" Command="{Binding WipeClientCommand}"
                                             Background="{StaticResource DangerDimBrush}" BorderBrush="#35FF4757" BorderThickness="1">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
@@ -511,7 +634,7 @@
             </Grid>
 
             <!-- UPDATE MODAL OVERLAY -->
-            <Grid x:Name="UpdateOverlay" Background="#B0000000" Visibility="Collapsed">
+            <Grid Background="#B0000000" Visibility="{Binding UpdateModal.IsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Border Width="380" Background="#F012111E" BorderBrush="#606C5CE7" BorderThickness="1" CornerRadius="16" Padding="32"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border.Effect>
@@ -521,13 +644,13 @@
                         <Border Background="{StaticResource PurpleDimBrush}" BorderBrush="#406C5CE7" BorderThickness="1" CornerRadius="20" Width="44" Height="44" HorizontalAlignment="Center" Margin="0,0,0,10">
                             <Path Data="{StaticResource IconRefreshGeometry}" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock x:Name="UpdateTitle" Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="UpdateVersionText" Text="" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
-                        <TextBlock x:Name="UpdateDesc" Text="Нажмите «Скачать», чтобы получить новую версию" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
+                        <TextBlock Text="Доступно обновление" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding UpdateModal.UpdateVersion}" FontSize="26" FontWeight="Black" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,4,0,8"/>
+                        <TextBlock Text="{Binding UpdateModal.UpdateDescription}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
 
                         <!-- Update Progress -->
-                        <StackPanel x:Name="UpdateProgressPanel" Margin="0,0,0,16" Visibility="Collapsed">
-                            <ProgressBar x:Name="UpdateProgressBar" Height="6" Background="#20FFFFFF" Value="0">
+                        <StackPanel Margin="0,0,0,16" Visibility="{Binding UpdateModal.IsDownloadingUpdate, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ProgressBar Height="6" Background="#20FFFFFF" Value="{Binding UpdateModal.UpdateProgressPercent}">
                                 <ProgressBar.Template>
                                     <ControlTemplate TargetType="ProgressBar">
                                         <Border Background="{TemplateBinding Background}" CornerRadius="3">
@@ -538,47 +661,23 @@
                                     </ControlTemplate>
                                 </ProgressBar.Template>
                             </ProgressBar>
-                            <TextBlock x:Name="UpdateProgressLabel" Text="0%" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding UpdateModal.UpdateProgressLabel}" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button x:Name="UpdateDownloadBtn" Padding="20,8" Margin="0,0,8,0" Cursor="Hand" Click="UpdateDownloadBtn_Click">
+                            <Button Padding="20,8" Margin="0,0,8,0" Cursor="Hand" Command="{Binding UpdateModal.DownloadUpdateCommand}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="{StaticResource AccentGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <Path Data="{StaticResource IconDownloadGeometry}" Stroke="#0A0A0A" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="btnTxt" Text="Скачать" FontSize="12" FontWeight="Bold" Foreground="#0A0A0A" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Скачать" FontSize="12" FontWeight="Bold" Foreground="#0A0A0A" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                            <Button x:Name="UpdateInstallBtn" Padding="20,8" Margin="0,0,8,0" Cursor="Hand" Visibility="Collapsed" Click="UpdateInstallBtn_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border Background="{StaticResource PurpleGradientBrush}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource IconRefreshGeometry}" Stroke="#FFFFFF" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="Установить" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                            <Button x:Name="UpdateManualBtn" Padding="14,8" Margin="0,0,8,0" Cursor="Hand" Visibility="Collapsed" Click="UpdateManualBtn_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border Background="Transparent" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource IconGlobeGeometry}" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="Вручную" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                            <Button Padding="16,8" Cursor="Hand" Click="UpdateLaterBtn_Click">
+                            <Button Padding="16,8" Cursor="Hand" Command="{Binding UpdateModal.DismissCommand}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
@@ -593,13 +692,34 @@
             </Grid>
 
             <!-- TOAST NOTIFICATION (Bottom) -->
-            <Border x:Name="ToastBorder" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24"
-                    Background="#E60A0A0A" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8"
-                    Padding="16,8" Visibility="Collapsed" IsHitTestVisible="False">
+            <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24"
+                    Background="#E60A0A0A" BorderThickness="1" CornerRadius="8"
+                    Padding="16,8" Visibility="{Binding IsToastVisible, Converter={StaticResource BooleanToVisibilityConverter}}" IsHitTestVisible="False">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsToastError}" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Border.Effect>
                     <DropShadowEffect Color="#00FF88" BlurRadius="16" Opacity="0.3" ShadowDepth="0"/>
                 </Border.Effect>
-                <TextBlock x:Name="ToastText" Text="Сообщение" FontSize="12" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding ToastText}" FontSize="12" FontWeight="SemiBold">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsToastError}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </Border>
         </Grid>
     </Border>

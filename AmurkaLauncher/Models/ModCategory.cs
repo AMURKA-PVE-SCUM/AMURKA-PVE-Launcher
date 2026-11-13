@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace AmurkaLauncher.Models;
 
-public class ModCategory : INotifyPropertyChanged
+public sealed class ModCategory : INotifyPropertyChanged
 {
     public string Id { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
@@ -54,11 +54,11 @@ public class ModCategory : INotifyPropertyChanged
         }
     }
 
-    public string CountDisplay => InstalledCount > 0 ? $"{InstalledCount}/{TotalCount}" : TotalCount.ToString();
+    public string CountDisplay => InstalledCount > 0 ? $"{InstalledCount}/{TotalCount}" : TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }

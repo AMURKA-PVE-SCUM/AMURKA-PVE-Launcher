@@ -1,37 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <LangVersion>12.0</LangVersion>
-    <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
-    <AssemblyName>AMURKA PVE Launcher Setup</AssemblyName>
+    <AssemblyName>AmurkaInstaller</AssemblyName>
     <RootNamespace>AmurkaInstaller</RootNamespace>
-    <Version>2.1.29</Version>
-    <FileVersion>2.1.29.0</FileVersion>
-    <ProductVersion>2.1.29.0</ProductVersion>
+    <Version>3.0.0</Version>
+    <FileVersion>3.0.0.0</FileVersion>
+    <ProductVersion>3.0.0.0</ProductVersion>
     <Company>AMURKA PVE</Company>
     <Product>AMURKA PVE Launcher Installer</Product>
-    <Description>Брендированный установщик AMURKA PVE Launcher</Description>
-
-    <!-- Runtime Size Optimization Properties -->
-    <SatelliteResourceLanguages>ru;en</SatelliteResourceLanguages>
-    <DebuggerSupport>false</DebuggerSupport>
-    <EventSourceSupport>false</EventSourceSupport>
-    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
-    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
-    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <Description>Брендированный модуль установки AMURKA PVE Launcher</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Resources\icon.ico" />
+    <Resource Include="Resources\icon.png" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
+    <ProjectReference Include="..\Amurka.Shared\Amurka.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
   </ItemGroup>
 
 </Project>

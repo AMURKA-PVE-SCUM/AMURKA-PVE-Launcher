@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace AmurkaLauncher.Models;
 
-public class UpdateInfo
+public sealed class UpdateInfo
 {
     [JsonPropertyName("version")]
     public string Version { get; set; } = string.Empty;
