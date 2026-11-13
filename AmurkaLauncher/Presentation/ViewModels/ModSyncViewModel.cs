@@ -132,26 +132,26 @@ public sealed partial class ModSyncViewModel : ViewModelBase
         if (missingCount == 0 && extraCount == 0)
         {
             IsSyncBannerVisible = false;
-            StatusChanged?.Invoke("Моды синхронизированы с сервером", true);
+            StatusChanged?.Invoke("Моды синхронизированы с Яндекс Диском", true);
             return;
         }
 
         if (missingCount > 0 && extraCount > 0)
         {
             SyncBannerTitle = "Требуется синхронизация модификаций";
-            SyncBannerDescription = $"Скачать с сервера: {missingCount} · Удалить сторонних: {extraCount}";
+            SyncBannerDescription = $"Скачать с Яндекс Диска: {missingCount} · Удалить сторонних: {extraCount}";
             StatusChanged?.Invoke($"Требуется синхронизация ({missingCount} из {_availableMods.Count})", false);
         }
         else if (missingCount > 0)
         {
             SyncBannerTitle = "Доступны обновления модификаций";
-            SyncBannerDescription = $"Необходимо скачать: {missingCount} из {_availableMods.Count} модов";
+            SyncBannerDescription = $"Необходимо скачать с Яндекс Диска: {missingCount} из {_availableMods.Count} модов";
             StatusChanged?.Invoke($"Требуется скачать: {missingCount} из {_availableMods.Count}", false);
         }
         else
         {
             SyncBannerTitle = "Обнаружены сторонние файлы";
-            SyncBannerDescription = $"В папке найдено {extraCount} сторонних файлов";
+            SyncBannerDescription = $"В папке найдено {extraCount} файлов не с Яндекс Диска";
             StatusChanged?.Invoke($"Лишних файлов в папке: {extraCount}", false);
         }
 
@@ -209,7 +209,7 @@ public sealed partial class ModSyncViewModel : ViewModelBase
                 {
                     DownloadProgressPercent = report.Percent;
                     DownloadProgressLabel = $"{report.CurrentFile} — {FormatBytes(report.DownloadedBytes)} / {FormatBytes(report.TotalBytes)}";
-                    StatusChanged?.Invoke($"Загрузка: {report.CurrentFile} ({report.Percent}%)", true);
+                    StatusChanged?.Invoke($"Загрузка с Яндекс Диска: {report.CurrentFile} ({report.Percent}%)", true);
                 });
             });
 
@@ -261,8 +261,8 @@ public sealed partial class ModSyncViewModel : ViewModelBase
             }
             else
             {
-                ToastRequested?.Invoke("Моды полностью синхронизированы", false);
-                StatusChanged?.Invoke("Моды полностью синхронизированы", true);
+                ToastRequested?.Invoke("Моды полностью синхронизированы с Яндекс Диском", false);
+                StatusChanged?.Invoke("Моды полностью синхронизированы с Яндекс Диском", true);
             }
 
             return true;

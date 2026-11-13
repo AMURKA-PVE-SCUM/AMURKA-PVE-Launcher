@@ -585,7 +585,7 @@ public sealed class ModManagerService : IModSyncEngine, IModCatalogRepository, I
                 if (diff > TimeSpan.Zero) delay = diff;
             }
 
-            _logger?.LogWarning("GitVerse вернул HTTP 429 (Превышен лимит запросов). Ожидание {DelaySec:F1} сек перед повтором файла {ModName}...", delay.TotalSeconds, mod.Name);
+            _logger?.LogWarning("Яндекс Диск вернул HTTP 429 (Превышен лимит запросов). Ожидание {DelaySec:F1} сек перед повтором файла {ModName}...", delay.TotalSeconds, mod.Name);
             await Task.Delay(delay, ct);
             throw new HttpRequestException("HTTP 429 Too Many Requests (Rate Limit). Повтор запроса...", null, (HttpStatusCode)429);
         }
